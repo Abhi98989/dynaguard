@@ -27,8 +27,18 @@ jobs:
             echo "🚀 Starting DynaGuard deployment..."
             cd ${{ secrets.DEPLOY_PATH }}
 
-            echo "📥 Pulling latest changes from main..."
-            git pull origin main
+            echo "📥 Syncing latest changes from GitHub..."
+            if [ ! -d ".git" ]; then
+              echo "Git not initialized on server. Initializing repository..."
+              git init -b main
+              git remote add origin https://github.com/Abhi98989/dynaguard.git || git remote set-url origin https://github.com/Abhi98989/dynaguard.git
+              git fetch origin main
+              git reset --hard origin/main
+              git branch --set-upstream-to=origin/main main
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
 
             echo "📦 Building and restarting containers..."
             docker compose down
