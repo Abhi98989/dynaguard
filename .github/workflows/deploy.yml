@@ -33,13 +33,13 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "📦 Building images..."
+            echo "📦 Building images with fresh code..."
             docker compose build api
-            docker compose build dashboard
+            docker compose build --no-cache dashboard
 
             echo "🚀 Restarting containers..."
             docker compose down
-            docker compose up -d
+            docker compose up -d --force-recreate
 
             echo "🔍 Container Status:"
             docker compose ps

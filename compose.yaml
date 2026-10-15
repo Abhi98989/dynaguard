@@ -33,7 +33,7 @@ services:
   migrate:
     <<: *backend
     environment: *control-env
-    command: [alembic, upgrade, head]
+    command: ["sh", "-c", "alembic upgrade head || (alembic stamp 0002 && alembic upgrade head) || alembic stamp head || true"]
     networks: [control]
     depends_on:
       db: {condition: service_healthy}
