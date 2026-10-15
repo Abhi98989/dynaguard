@@ -24,28 +24,32 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script_stop: true
           script: |
+            set -x
             echo "🚀 Starting DynaGuard deployment..."
             cd ${{ secrets.DEPLOY_PATH }}
 
             echo "📥 Syncing latest changes from GitHub..."
+            git config --global --add safe.directory "*" || true
+
             if [ ! -d ".git" ]; then
-              echo "Git not initialized on server. Initializing repository..."
+              echo "Git not initialized on server. Initializing..."
               git init -b main
               git remote add origin https://github.com/Abhi98989/dynaguard.git || git remote set-url origin https://github.com/Abhi98989/dynaguard.git
-              git fetch origin main
-              git reset --hard origin/main
-              git branch --set-upstream-to=origin/main main
             else
-              git fetch origin main
-              git reset --hard origin/main
+              git remote set-url origin https://github.com/Abhi98989/dynaguard.git || true
             fi
+
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "📦 Building and restarting containers..."
             docker compose down || true
             docker compose build api
             docker compose build dashboard
+
+            echo "🚀 Starting services..."
             if ! docker compose up -d; then
-              echo "❌ Deployment error! Showing container logs:"
+              echo "❌ Deployment error! Printing container logs..."
               echo "--- MIGRATE LOGS ---"
               docker compose logs migrate || true
               echo "--- DB LOGS ---"
