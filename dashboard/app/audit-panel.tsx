@@ -276,7 +276,7 @@ dynaguard upload --report audit.json --server https://dynaguard.dynamatrixsoluti
                   </div>
                 </div>
 
-                {run.report?.stacks && (
+                {Array.isArray(run.report?.stacks) && run.report.stacks.length > 0 && (
                   <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {run.report.stacks.map(st => (
                       <span key={st} style={{ background: '#f1f5f9', color: '#475569', fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>

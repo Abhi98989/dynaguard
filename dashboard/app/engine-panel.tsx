@@ -80,12 +80,12 @@ export default function EnginePanel({projectId}: {projectId: string}) {
     <label>Review selected source files<input type="file" multiple disabled={busy} onChange={e => {void upload(e.target.files); e.target.value = '';}} /></label>
     <p className="muted">Selected file contents are sent to this DynaGuard server for heuristic review, then removed from temporary storage. Reports omit source snippets. CLI scans stay local.</p>
     <h3>Shared engine runs</h3>
-    {runs.length === 0 && <p>No shared engine runs yet.</p>}
-    {runs.map(run => <details key={run.id}><summary>{run.mode} · {run.status} · {run.id.slice(0, 8)}</summary><p>{run.stage}</p>
+    {runs.filter(r => r.mode !== 'audit').length === 0 && <p>No shared engine runs yet.</p>}
+    {runs.filter(r => r.mode !== 'audit').map(run => <details key={run.id}><summary>{run.mode} · {run.status} · {run.id.slice(0, 8)}</summary><p>{run.stage}</p>
       {['queued', 'running'].includes(run.status) && <button onClick={() => request(`/engine-runs/${run.id}/cancel`, {}).catch(e => setError(e.message))}>Cancel</button>}
-      {run.report && <><p>{run.report.findings.length} findings. Completed describes execution, not a security guarantee.</p><pre>{JSON.stringify(run.report.coverage, null, 2)}</pre>
-        {run.report.executions.map(e => <p key={e.test_id}><strong>{e.test_id}: {e.outcome}</strong> — {e.actual}</p>)}
-        {run.report.findings.map(f => <p key={f.id}>{f.severity} · {f.verification} · {f.title}</p>)}
+      {run.report && <><p>{run.report.findings?.length || 0} findings. Completed describes execution, not a security guarantee.</p><pre>{JSON.stringify(run.report.coverage, null, 2)}</pre>
+        {run.report.executions?.map(e => <p key={e.test_id}><strong>{e.test_id}: {e.outcome}</strong> — {e.actual}</p>)}
+        {run.report.findings?.map(f => <p key={f.id}>{f.severity} · {f.verification} · {f.title}</p>)}
         <button onClick={() => download(run)}>Download JSON report</button><details><summary>Evidence and limitations</summary><pre>{JSON.stringify(run.report, null, 2)}</pre></details></>}
     </details>)}
   </section>;
