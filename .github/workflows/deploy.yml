@@ -33,31 +33,26 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "🛑 Stopping old containers and freeing port 3000..."
-            docker compose down || true
-            docker rm -f dynaguard-dashboard-1 dynaguard-api-1 || true
-            pkill -9 -f "server.js" || true
-            pkill -9 -f "next" || true
-            fuser -k -9 3000/tcp || true
-            python3 -c "import os, subprocess; [os.kill(int(l.split('pid=')[1].split(',')[0]), 9) for l in subprocess.getoutput('ss -tulpn').splitlines() if ':3000 ' in l and 'pid=' in l]" || true
+            echo "🛑 Stopping containers cleanly..."
+            docker compose down --remove-orphans
 
-            echo "📦 Building images with fresh code (no cache)..."
-            docker compose build --no-cache api dashboard
+            echo "📦 Building images..."
+            docker compose build api dashboard
 
-            echo "🚀 Starting fresh containers..."
-            docker compose up -d --force-recreate
+            echo "🚀 Starting containers..."
+            docker compose up -d
 
-            sleep 4
+            sleep 5
             echo "🔍 All Containers Status:"
-            docker compose ps -a
+            docker compose ps
 
             echo "📋 Dashboard container logs:"
-            docker compose logs --tail=20 dashboard || true
+            docker compose logs --tail=20 dashboard
 
             echo "📋 API container logs:"
-            docker compose logs --tail=20 api || true
+            docker compose logs --tail=20 api
 
-            echo "🧹 Cleaning up old unused images to save disk space..."
-            docker image prune -f || true
+            echo "🧹 Cleaning up old unused images..."
+            docker image prune -f
 
             echo "✅ Deployment completed successfully!"
