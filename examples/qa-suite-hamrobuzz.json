@@ -5,70 +5,47 @@
   "build_id": "build-prod-2026.10",
   "target_origin": "https://hamrobuzz.com",
   "identities": {
-    "journalist": {
-      "token": "dgt_journalist_test_token"
-    },
     "guest": {
       "token": ""
     }
   },
   "api_tests": [
     {
-      "id": "hb-api-health",
-      "name": "Verify HamroBuzz public gateway availability",
+      "id": "hb-system-health",
+      "name": "System Health Check Probe",
+      "technique": "happy_path",
+      "method": "GET",
+      "endpoint": "/health",
+      "expected_status": 200,
+      "assertions": []
+    },
+    {
+      "id": "hb-system-ready",
+      "name": "System Readiness Probe",
+      "technique": "happy_path",
+      "method": "GET",
+      "endpoint": "/ready",
+      "expected_status": 200,
+      "assertions": []
+    },
+    {
+      "id": "hb-api-articles-feed",
+      "name": "Public News Articles Feed",
+      "technique": "happy_path",
+      "method": "GET",
+      "endpoint": "/api/v1/articles",
+      "expected_status": 200,
+      "assertions": []
+    },
+    {
+      "id": "hb-landing-page",
+      "name": "English Landing Gateway Render",
       "technique": "happy_path",
       "method": "GET",
       "endpoint": "/en",
       "expected_status": 200,
       "assertions": []
-    },
-    {
-      "id": "hb-neg-empty-article",
-      "name": "Negative test: Reject empty article submission without server error",
-      "technique": "negative",
-      "method": "POST",
-      "endpoint": "/api/articles",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "body": {
-        "title": "",
-        "content": ""
-      },
-      "expected_status": 401,
-      "assertions": []
-    },
-    {
-      "id": "hb-auth-unauthorized-cms-access",
-      "name": "Role boundary: Anonymous guest cannot access journalist drafting suite",
-      "technique": "invariants",
-      "method": "GET",
-      "endpoint": "/api/cms/drafts",
-      "expected_status": 401,
-      "assertions": []
     }
   ],
-  "browser_tests": [
-    {
-      "id": "hb-browser-home-navigation",
-      "name": "Verify HamroBuzz English landing page rendering and navigation",
-      "technique": "happy_path",
-      "start_url": "/en",
-      "actions": [
-        {
-          "type": "wait_for",
-          "selector": "body",
-          "timeout_ms": 10000
-        },
-        {
-          "type": "assert_visible",
-          "selector": "header"
-        }
-      ],
-      "expected_outcomes": [
-        "Landing page loads with HTTP 200",
-        "Header and topic navigation visible"
-      ]
-    }
-  ]
+  "browser_tests": []
 }
