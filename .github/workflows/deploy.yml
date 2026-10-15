@@ -41,9 +41,17 @@ jobs:
             fi
 
             echo "📦 Building and restarting containers..."
-            docker compose down
-            docker compose build
-            docker compose up -d
+            docker compose down || true
+            docker compose build api
+            docker compose build dashboard
+            if ! docker compose up -d; then
+              echo "❌ Deployment error! Showing container logs:"
+              echo "--- MIGRATE LOGS ---"
+              docker compose logs migrate || true
+              echo "--- DB LOGS ---"
+              docker compose logs db || true
+              exit 1
+            fi
 
             echo "🔍 Verifying running services..."
             docker compose ps
