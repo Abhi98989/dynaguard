@@ -98,14 +98,15 @@ export default function AuditPanel({ projectId }: { projectId: string }) {
       const data = await req<EngineRun[]>(`/projects/${projectId}/engine-runs`);
       const audits = data.filter(r => r.mode === 'audit');
       setRuns(audits);
-      if (selectedRun) {
-        const updated = audits.find(r => r.id === selectedRun.id);
-        if (updated) setSelectedRun(updated);
-      }
+      setSelectedRun(prev => {
+        if (!prev) return audits[0] || null;
+        const updated = audits.find(r => r.id === prev.id);
+        return updated || audits[0] || null;
+      });
     } catch {
       // ignore run fetch errors
     }
-  }, [projectId, selectedRun]);
+  }, [projectId]);
 
   useEffect(() => {
     void refreshTokens();
@@ -377,32 +378,81 @@ dynaguard upload --report audit.json --server https://dynaguard.dynamatrixsoluti
             {filteredFindings.length === 0 ? (
               <p className="muted" style={{ padding: 16, textAlign: 'center' }}>No findings match the current filter.</p>
             ) : (
-              filteredFindings.map(f => (
-                <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                    <div>
-                      <span className={`badge ${f.severity === 'critical' || f.severity === 'high' ? 'failed' : 'incomplete'}`} style={{ marginRight: 8 }}>
-                        {f.severity.toUpperCase()}
-                      </span>
-                      <span style={{ fontSize: 11, background: '#e2e8f0', padding: '2px 6px', borderRadius: 4, marginRight: 8 }}>
-                        {f.layer}
-                      </span>
-                      <strong>{f.title}</strong>
-                    </div>
-                    {f.cwe && <span style={{ fontSize: 11, color: '#64748b' }}>{f.cwe}</span>}
-                  </div>
+              filteredFindings.map(f => {
+                const isCredential = /credential|password|token|secret|key/i.test(f.title + f.rule_id);
+                const isXss = /dangerouslySetInnerHTML|xss/i.test(f.title + f.rule_id);
+                const isDebug = /debug/i.test(f.title + f.rule_id);
+                const isPrivilege = /superuser|privilege|grant/i.test(f.title + f.rule_id);
+                const isTls = /tls|ssl|certificate/i.test(f.title + f.rule_id);
 
-                  {f.path && (
-                    <div style={{ fontSize: 12, color: '#475569', marginTop: 6, fontFamily: 'monospace' }}>
-                      {f.path}{f.line ? `:${f.line}` : ''}
-                    </div>
-                  )}
+                let threatContext = '';
+                if (isCredential) {
+                  threatContext = 'Hardcoded credentials in source files or frontend bundles expose admin/service accounts. Anyone with access to the repo or inspecting client JS can extract these credentials and bypass authentication entirely.';
+                } else if (isXss) {
+                  threatContext = 'Direct HTML injection bypasses React escaping. Malicious actors or stored content can execute arbitrary JavaScript in the victim\'s browser to steal cookies, hijack user sessions, or deface the site.';
+                } else if (isDebug) {
+                  threatContext = 'Production debug mode exposes interactive debuggers, stack traces, and internal environment configurations to external requests, facilitating further exploitation.';
+                } else if (isPrivilege) {
+                  threatContext = 'Unrestricted database privileges allow an application breach to escalate into a full database takeover, dumping or deleting data across other tenants and services.';
+                } else if (isTls) {
+                  threatContext = 'Disabled TLS verification allows Man-in-the-Middle (MitM) attackers on the network to intercept, decrypt, and alter sensitive traffic.';
+                }
 
-                  <div style={{ fontSize: 13, color: '#1e293b', marginTop: 8, background: '#f8fafc', padding: 8, borderRadius: 4 }}>
-                    <strong>Suggested Repair:</strong> {f.recommendation}
+                return (
+                  <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span className={`badge ${f.severity === 'critical' || f.severity === 'high' ? 'failed' : 'incomplete'}`}>
+                          {f.severity.toUpperCase()}
+                        </span>
+                        <span style={{ fontSize: 11, background: '#e2e8f0', color: '#334155', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+                          {f.layer.toUpperCase()}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>
+                          {f.rule_id}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {f.cwe && <span style={{ fontSize: 11, background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>{f.cwe}</span>}
+                        {f.owasp && <span style={{ fontSize: 11, background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>{f.owasp}</span>}
+                      </div>
+                    </div>
+
+                    <h4 style={{ margin: '10px 0 6px 0', fontSize: 15, color: '#0f172a' }}>{f.title}</h4>
+
+                    {/* File Location Banner */}
+                    {f.path && (
+                      <div style={{ fontSize: 12, background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'monospace', color: '#0284c7', margin: '6px 0' }}>
+                        <span>📍 Location:</span>
+                        <strong>{f.path}</strong>
+                        {f.line ? <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '1px 6px', borderRadius: 4 }}>Line {f.line}</span> : null}
+                      </div>
+                    )}
+
+                    {/* Threat & Bypass Scenario */}
+                    {threatContext && (
+                      <div style={{ fontSize: 13, background: '#fffbeb', border: '1px solid #fef3c7', padding: '10px 12px', borderRadius: 6, margin: '8px 0', color: '#92400e' }}>
+                        <strong>⚠️ Threat & Exploitation Vector:</strong>
+                        <p style={{ margin: '4px 0 0 0', lineHeight: 1.4 }}>{threatContext}</p>
+                      </div>
+                    )}
+
+                    {/* Evidence Match */}
+                    {f.evidence && f.evidence !== 'Pattern matched; source text and sensitive values omitted.' && (
+                      <div style={{ fontSize: 12, background: '#f1f5f9', padding: '8px 10px', borderRadius: 6, margin: '8px 0', color: '#334155', fontFamily: 'monospace' }}>
+                        <span style={{ color: '#64748b' }}>Evidence: </span>{f.evidence}
+                      </div>
+                    )}
+
+                    {/* How to Fix / Remediation */}
+                    <div style={{ fontSize: 13, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '10px 12px', borderRadius: 6, marginTop: 10 }}>
+                      <strong style={{ display: 'block', marginBottom: 4 }}>🛡️ How to Fix / Remediation:</strong>
+                      <span>{f.recommendation}</span>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
