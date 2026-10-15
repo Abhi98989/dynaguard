@@ -35,10 +35,13 @@ jobs:
 
             echo "📦 Building images with fresh code..."
             docker compose build api
-            docker compose build --no-cache dashboard
+            docker compose build dashboard
 
-            echo "🚀 Restarting containers..."
-            docker compose down
+            echo "🛑 Freeing port 3000 and restarting containers..."
+            docker compose down || true
+            docker ps -q --filter "publish=3000" | xargs -r docker stop || true
+            fuser -k 3000/tcp || true
+            lsof -ti:3000 | xargs -r kill -9 || true
             docker compose up -d --force-recreate
 
             echo "🔍 Container Status:"

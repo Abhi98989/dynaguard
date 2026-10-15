@@ -24,8 +24,24 @@ def _load_env_file():
 _load_env_file()
 
 
+import urllib.parse
+
+
 def database_url():
-    return os.environ.get('DATABASE_URL', 'sqlite:///./dynaguard.db')
+    if 'POSTGRES_PASSWORD' in os.environ and '@db' in os.environ.get('DATABASE_URL', ''):
+        pwd = urllib.parse.quote_plus(os.environ['POSTGRES_PASSWORD'])
+        return f"postgresql+psycopg://dynaguard:{pwd}@db:5432/dynaguard"
+    raw = os.environ.get('DATABASE_URL', 'sqlite:///./dynaguard.db')
+    if raw.startswith('postgresql') and '@' in raw:
+        try:
+            proto, rest = raw.split('://', 1)
+            up, host_part = rest.rsplit('@', 1)
+            if ':' in up:
+                user, p = up.split(':', 1)
+                return f"{proto}://{user}:{urllib.parse.quote_plus(urllib.parse.unquote_plus(p))}@{host_part}"
+        except Exception:
+            pass
+    return raw
 
 
 def targets():

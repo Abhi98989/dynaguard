@@ -13,6 +13,7 @@ x-backend: &backend
 
 x-control-env: &control-env
   DATABASE_URL: postgresql+psycopg://dynaguard:${POSTGRES_PASSWORD:?Run python scripts/setup.py first}@db:5432/dynaguard
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup first}
   TARGETS_JSON: '{"http://fixture-vulnerable:8000":["172.30.91.10"],"http://fixture-fixed:8000":["172.30.91.11"]}'
 
 services:
