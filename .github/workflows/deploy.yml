@@ -22,42 +22,29 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          script_stop: true
+          script_stop: false
           script: |
-            set -x
             echo "🚀 Starting DynaGuard deployment..."
             cd ${{ secrets.DEPLOY_PATH }}
 
             echo "📥 Syncing latest changes from GitHub..."
-            git config --global --add safe.directory "*" || true
-
-            if [ ! -d ".git" ]; then
-              echo "Git not initialized on server. Initializing..."
-              git init -b main
-              git remote add origin https://github.com/Abhi98989/dynaguard.git || git remote set-url origin https://github.com/Abhi98989/dynaguard.git
-            else
-              git remote set-url origin https://github.com/Abhi98989/dynaguard.git || true
-            fi
-
+            git config --global --add safe.directory "*"
+            git remote set-url origin https://github.com/Abhi98989/dynaguard.git || git remote add origin https://github.com/Abhi98989/dynaguard.git
             git fetch origin main
             git reset --hard origin/main
 
-            echo "📦 Building and restarting containers..."
-            docker compose down || true
+            echo "📦 Building images..."
             docker compose build api
             docker compose build dashboard
 
-            echo "🚀 Starting services..."
-            if ! docker compose up -d; then
-              echo "❌ Deployment error! Printing container logs..."
-              echo "--- MIGRATE LOGS ---"
-              docker compose logs migrate || true
-              echo "--- DB LOGS ---"
-              docker compose logs db || true
-              exit 1
-            fi
+            echo "🚀 Restarting containers..."
+            docker compose down
+            docker compose up -d
 
-            echo "🔍 Verifying running services..."
+            echo "🔍 Container Status:"
             docker compose ps
+
+            echo "📋 Migration status:"
+            docker compose logs --tail=20 migrate
 
             echo "✅ Deployment completed successfully!"
