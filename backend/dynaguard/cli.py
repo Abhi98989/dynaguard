@@ -240,6 +240,29 @@ def parser():
     report_p.add_argument('--input', required=True)
     report_p.add_argument('--output', default='dynaguard-report.html')
 
+    # qa planning and execution
+    qa = commands.add_parser('qa', help='QA skill catalog, risk-based planning, and executable pre-release testing')
+    qa_actions = qa.add_subparsers(dest='qa_action', required=True)
+
+    qa_catalog = qa_actions.add_parser('catalog', help='Export catalog of 43 QA skill contracts')
+    qa_catalog.add_argument('--output', default='dynaguard-qa-catalog.json')
+
+    qa_plan = qa_actions.add_parser('plan', help='Generate risk-based QA plan from a QA profile')
+    qa_plan.add_argument('--profile', required=True, help='Path to QA profile JSON')
+    qa_plan.add_argument('--output', default='dynaguard-qa-plan.json')
+
+    qa_run = qa_actions.add_parser('run', help='Execute QA test suite (API functional & browser workflows)')
+    qa_run.add_argument('--suite', required=True, help='Path to QA test suite JSON')
+    qa_run.add_argument('--profile', default=None, help='Optional QA profile JSON')
+    qa_run.add_argument('--output', default='dynaguard-qa-results.json')
+    qa_run.add_argument('--html', default=None, help='Optional HTML report path')
+
+    qa_retest = qa_actions.add_parser('retest', help='Retest previous QA run against fixed build')
+    qa_retest.add_argument('--suite', required=True, help='Path to QA test suite JSON')
+    qa_retest.add_argument('--report', required=True, help='Path to previous failing QA report JSON')
+    qa_retest.add_argument('--output', default='dynaguard-qa-retest.json')
+    qa_retest.add_argument('--html', default=None, help='Optional HTML report path')
+
     return root
 
 
@@ -249,6 +272,46 @@ def main(argv=None):
         if args.command == 'doctor':
             run_doctor()
             return 0
+
+        if args.command == 'qa':
+            from .qa import catalog, QAProfile, build_plan
+            if args.qa_action == 'catalog':
+                Path(args.output).write_text(json.dumps(catalog(), indent=2) + '\n', encoding='utf-8')
+                print(f"QA catalog (43 skills) exported to {args.output}")
+                return 0
+
+            if args.qa_action == 'plan':
+                profile = QAProfile.model_validate_json(Path(args.profile).read_text(encoding='utf-8'))
+                plan = build_plan(profile)
+                write_report(plan, args.output)
+                print(f"QA plan created: {args.output} (does not execute test adapters)")
+                return 0
+
+            if args.qa_action in ('run', 'retest'):
+                from .qa_runner import QATestSuite, execute_qa_suite
+                suite = QATestSuite.model_validate_json(Path(args.suite).read_text(encoding='utf-8'))
+                profile = None
+                if getattr(args, 'profile', None):
+                    profile = QAProfile.model_validate_json(Path(args.profile).read_text(encoding='utf-8'))
+
+                prev_report = None
+                if args.qa_action == 'retest':
+                    prev_report = json.loads(Path(args.report).read_text(encoding='utf-8'))
+
+                result = execute_qa_suite(suite, profile, prev_report)
+                write_report(result, args.output)
+                if args.html:
+                    rendered = render_html_report(result)
+                    Path(args.html).write_text(rendered, encoding='utf-8')
+
+                cov = result['coverage']
+                gate = result['release_gate']
+                print(f"QA {args.qa_action}: status={result['status']}; planned={cov['planned']}, passed={cov['passed']}, failed={cov['failed']}, blocked={cov['blocked']}; release={gate['decision']}")
+                if result['findings']:
+                    print(f"Defects found ({len(result['findings'])}):")
+                    for fd in result['findings']:
+                        print(f"  - [{fd['severity'].upper()}] {fd['title']}")
+                return 1 if gate['decision'] == 'rejected' else 0
 
         if args.command == 'upload':
             upload_report(args.report, args.server, args.token_env)

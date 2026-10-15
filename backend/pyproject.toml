@@ -17,3 +17,6 @@ dynaguard = "dynaguard.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["dynaguard*"]
+
+[tool.setuptools.package-data]
+dynaguard = ["data/*.json"]

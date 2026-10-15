@@ -117,3 +117,46 @@ def template():
         value['target']['origin'] = origin
         value['target']['pinned_ips'] = registered[origin]
     return value
+
+
+@router.get('/qa/skills')
+def qa_skills():
+    from dynaguard.qa import catalog
+    return catalog()
+
+
+from dynaguard.qa import QAProfile, build_plan
+from dynaguard.qa_runner import QATestSuite, execute_qa_suite
+
+
+@router.post('/projects/{project_id}/qa-plan', status_code=201)
+def qa_plan(project_id: str, body: QAProfile, session=Depends(db)):
+    project(session, project_id)
+    try:
+        report = build_plan(body)
+    except ValueError:
+        raise HTTPException(422, 'Unknown or inapplicable QA skill selection') from None
+    row = EngineRun(project_id=project_id, mode='qa_plan', status='planned', stage='Plan created; no tests executed; release not evaluated', config=body.model_dump(), report=report)
+    session.add(row)
+    session.commit()
+    return dump(row)
+
+
+@router.post('/projects/{project_id}/qa-run', status_code=201)
+def qa_run(project_id: str, body: QATestSuite, session=Depends(db)):
+    project(session, project_id)
+    try:
+        report = execute_qa_suite(body)
+    except Exception as e:
+        raise HTTPException(422, f"QA execution failed: {str(e)}") from None
+    row = EngineRun(
+        project_id=project_id,
+        mode='qa_execution',
+        status=report.get('status', 'completed'),
+        stage=f"QA test suite executed: {report['coverage']['passed']} passed, {report['coverage']['failed']} failed",
+        config=body.model_dump(),
+        report=report
+    )
+    session.add(row)
+    session.commit()
+    return dump(row)

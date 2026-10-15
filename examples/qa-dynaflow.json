@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "project": "DynaFlow",
+  "build_id": "replace-with-actual-build",
+  "capabilities": ["web", "api", "database", "files", "messaging", "saas"],
+  "workflows": [
+    {
+      "id": "membership.remove",
+      "name": "Remove a member from a private project",
+      "risk": "critical",
+      "roles": ["project-owner", "member", "removed-member"],
+      "expected_rules": [
+        "The project owner can remove an assigned member.",
+        "After removal, the former member cannot read project data or private attachments.",
+        "Other authorized members retain their access."
+      ]
+    },
+    {
+      "id": "tasks.complete",
+      "name": "Assign and complete a task",
+      "risk": "high",
+      "roles": ["project-lead", "assignee"],
+      "expected_rules": [
+        "Only permitted project participants can assign tasks.",
+        "Task status persists after refresh and is visible to authorized participants.",
+        "Repeated submission must not create duplicate completion events."
+      ]
+    }
+  ]
+}

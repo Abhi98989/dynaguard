@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "suite_id": "dynaflow-core-verification",
+  "project": "DynaFlow",
+  "build_id": "dynaflow-v2.1",
+  "target_origin": "http://127.0.0.1:8000",
+  "identities": {
+    "project_owner": {
+      "token": "dynaflow_owner_token_abc"
+    },
+    "removed_member": {
+      "token": "dynaflow_removed_token_xyz"
+    }
+  },
+  "api_tests": [
+    {
+      "id": "df-owner-task-create",
+      "name": "Project owner assigns task with valid schema",
+      "technique": "happy_path",
+      "method": "POST",
+      "endpoint": "/api/projects/p1/tasks",
+      "auth_role": "project_owner",
+      "body": {
+        "title": "Review release checklist",
+        "priority": "high"
+      },
+      "expected_status": 200,
+      "assertions": [
+        {
+          "field": "title",
+          "operator": "equals",
+          "expected": "Review release checklist"
+        }
+      ]
+    },
+    {
+      "id": "df-neg-removed-member-boundary",
+      "name": "Security boundary: Former member cannot read project data after removal",
+      "technique": "invariants",
+      "method": "GET",
+      "endpoint": "/api/projects/p1",
+      "auth_role": "removed_member",
+      "expected_status": 403,
+      "assertions": [],
+      "verify_state_unchanged": {
+        "endpoint": "/api/projects/p1/members",
+        "field": "active_count",
+        "expected": 2
+      }
+    }
+  ],
+  "browser_tests": []
+}

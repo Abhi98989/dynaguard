@@ -1,0 +1,1151 @@
+{
+  "schema_version": 1,
+  "catalog_version": "1.0.0",
+  "purpose": "QA planning contracts, not a claim that every adapter exists",
+  "skills": [
+    {
+      "id": "requirements",
+      "name": "Requirements and traceability",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Resolve ambiguous acceptance criteria",
+        "map requirements to tests",
+        "list uncovered requirements"
+      ],
+      "evidence_required": "Requirement IDs, approved expected behavior, coverage gaps",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "human_plus_automation",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "risk",
+      "name": "Risk-based test strategy",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Rank customer and business impact",
+        "prioritize changed components",
+        "identify dependencies and rollback risks"
+      ],
+      "evidence_required": "Impact rationale, changed components, priorities",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "human_plus_automation",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "source",
+      "name": "Source and configuration review",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "partial",
+      "execution": "limited_existing_engine",
+      "checks": [
+        "Inspect sensitive literals",
+        "review dangerous code patterns",
+        "distinguish test fixtures from deployed code"
+      ],
+      "evidence_required": "File and line, rule ID, masked evidence",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": "dynaguard scan source",
+      "adapter_boundary": "Seven source heuristics only; no full static analysis or dependency scanning."
+    },
+    {
+      "id": "unit",
+      "name": "Unit and property-based testing",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test pure business functions",
+        "test invariants across generated inputs",
+        "check meaningful assertions"
+      ],
+      "evidence_required": "Test names, seed, minimized counterexample, runner version",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "component",
+      "name": "Component behavior",
+      "version": "1.0.0",
+      "applies_to": [
+        "web",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Exercise loading/empty/error states",
+        "verify input/output behavior",
+        "isolate dependencies"
+      ],
+      "evidence_required": "State matrix, assertions, component build",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "integration",
+      "name": "Service integration",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "database",
+        "messaging"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Verify service boundaries",
+        "test downstream errors",
+        "check contract version compatibility"
+      ],
+      "evidence_required": "Correlated requests, sandbox responses, integration versions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "api-contract",
+      "name": "API contract and schema",
+      "version": "1.0.0",
+      "applies_to": [
+        "api"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Validate response schema",
+        "test required/optional fields",
+        "validate status codes and pagination"
+      ],
+      "evidence_required": "Specification version, endpoint, schema differences",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "boundaries",
+      "name": "Boundary and negative testing",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Partition valid/invalid input",
+        "test values just below/at/above limits",
+        "test Unicode/null/empty values"
+      ],
+      "evidence_required": "Input class, expected behavior, actual output",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "workflow",
+      "name": "End-to-end business workflows",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Exercise complete user journeys",
+        "verify persistent side effects",
+        "test interrupted and reversed flows"
+      ],
+      "evidence_required": "Steps, final business state, fixture IDs",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "session",
+      "name": "Authentication and session lifecycle",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "web",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test expiry/revocation/logout",
+        "test password reset lifecycle",
+        "check session behavior after role changes"
+      ],
+      "evidence_required": "Session lifecycle assertions, masked requests",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "permissions",
+      "name": "Roles and record ownership",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "web",
+        "mobile"
+      ],
+      "implementation": "partial",
+      "execution": "limited_existing_engine",
+      "checks": [
+        "Compare authorized and unauthorized identities",
+        "test designated cross-owner records",
+        "check identity health after denial"
+      ],
+      "evidence_required": "Baseline, probe, matched synthetic fields, role contract",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": "dynaguard verify",
+      "adapter_boundary": "Configured read authorization only; no write-action or general privilege escalation testing."
+    },
+    {
+      "id": "tenant",
+      "name": "Tenant and branch isolation",
+      "version": "1.0.0",
+      "applies_to": [
+        "saas"
+      ],
+      "implementation": "partial",
+      "execution": "limited_existing_engine",
+      "checks": [
+        "Separate tenant fixtures",
+        "test records and exports",
+        "test shared cache and attachment boundaries"
+      ],
+      "evidence_required": "Tenant IDs, ownership rule, bounded disclosure proof",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": "dynaguard verify",
+      "adapter_boundary": "Only explicitly configured cross-tenant API reads; cache, exports and attachments need separately configured checks or future adapters."
+    },
+    {
+      "id": "security",
+      "name": "Web and API security",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "web"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Apply relevant OWASP tests",
+        "validate scanner candidates",
+        "distinguish exposure from demonstrated impact"
+      ],
+      "evidence_required": "Versioned test IDs, redacted proof, scope",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "business-abuse",
+      "name": "Business-rule abuse",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Attempt skipped approvals",
+        "test invalid state transitions",
+        "test inconsistent combinations of otherwise valid inputs"
+      ],
+      "evidence_required": "Business rule, transition history, synthetic side effects",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "database",
+      "name": "Database integrity",
+      "version": "1.0.0",
+      "applies_to": [
+        "database"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Check constraints and relationships",
+        "test transaction rollback",
+        "detect orphan or inconsistent records"
+      ],
+      "evidence_required": "Before/after queries on fixtures, constraint assertions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "migration",
+      "name": "Migration and rollback",
+      "version": "1.0.0",
+      "applies_to": [
+        "database"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test upgrades from supported versions",
+        "check data preservation",
+        "rehearse rollback or roll-forward recovery"
+      ],
+      "evidence_required": "Migration versions, reconciliation totals, restore result",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment",
+        "Isolated environment and explicit load/fault/recovery limits"
+      ],
+      "environment": "isolated_copy",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "concurrency",
+      "name": "Concurrency and race conditions",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "database"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Synchronize competing updates",
+        "test stock/seat allocation",
+        "check lost updates and locking behavior"
+      ],
+      "evidence_required": "Controlled schedule, invariants, counts before/after",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment",
+        "Isolated environment and explicit load/fault/recovery limits"
+      ],
+      "environment": "isolated_copy",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "idempotency",
+      "name": "Duplicate and replay handling",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "payments",
+        "offline",
+        "messaging"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Repeat requests with same operation identity",
+        "retry after timeout",
+        "check delayed duplicate events"
+      ],
+      "evidence_required": "Operation IDs, side-effect counts, deduplication outcome",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "performance",
+      "name": "Expected-load performance",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "web",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Measure agreed workload",
+        "assert latency/error-rate thresholds",
+        "detect regressions against a comparable baseline"
+      ],
+      "evidence_required": "Workload, p95/p99, error rate, resource metrics",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "stress",
+      "name": "Stress and spike behavior",
+      "version": "1.0.0",
+      "applies_to": [
+        "api"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Increase load in isolated capacity tests",
+        "enforce stop conditions",
+        "verify recovery after bursts"
+      ],
+      "evidence_required": "Load profile, abort threshold, saturation and recovery metrics",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment",
+        "Isolated environment and explicit load/fault/recovery limits"
+      ],
+      "environment": "isolated_copy",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "soak",
+      "name": "Soak and resource stability",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Run sustained representative activity",
+        "observe memory/connection growth",
+        "check queue accumulation"
+      ],
+      "evidence_required": "Duration, resource trend, backlog, recovery",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment",
+        "Isolated environment and explicit load/fault/recovery limits"
+      ],
+      "environment": "isolated_copy",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "resilience",
+      "name": "Fault injection and graceful recovery",
+      "version": "1.0.0",
+      "applies_to": [
+        "api",
+        "database",
+        "messaging"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Simulate dependency timeout/unavailability",
+        "inspect compensation",
+        "verify bounded retries and useful errors"
+      ],
+      "evidence_required": "Injected fault, expected degradation, recovery evidence",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment",
+        "Isolated environment and explicit load/fault/recovery limits"
+      ],
+      "environment": "isolated_copy",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "offline",
+      "name": "Offline sync and conflict resolution",
+      "version": "1.0.0",
+      "applies_to": [
+        "offline"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Disconnect and reconnect",
+        "reorder queued changes",
+        "test conflicting edits and repeated sync"
+      ],
+      "evidence_required": "Queue state, conflict policy, final reconciled records",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "accessibility",
+      "name": "Accessibility",
+      "version": "1.0.0",
+      "applies_to": [
+        "web",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Run automated accessibility checks",
+        "test keyboard/focus",
+        "review screen-reader and error announcements"
+      ],
+      "evidence_required": "Rule violations plus manual keyboard/screen-reader observations",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "human_plus_automation",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "visual",
+      "name": "Visual regression",
+      "version": "1.0.0",
+      "applies_to": [
+        "web",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Compare approved baselines",
+        "stabilize fonts/time/data",
+        "investigate differences instead of auto-accepting"
+      ],
+      "evidence_required": "Baseline ID, viewport, diff, reviewer decision",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "responsive",
+      "name": "Responsive layout",
+      "version": "1.0.0",
+      "applies_to": [
+        "web"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Exercise small/large viewports",
+        "test zoom and long text",
+        "check navigation and overflow"
+      ],
+      "evidence_required": "Viewport matrix, clipping/focus observations",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "compatibility",
+      "name": "Browser and operating-system compatibility",
+      "version": "1.0.0",
+      "applies_to": [
+        "web",
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Run priority workflows on supported combinations",
+        "compare storage/download behavior",
+        "check platform-specific failures"
+      ],
+      "evidence_required": "Browser/OS versions and per-flow outcomes",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "mobile",
+      "name": "Mobile lifecycle and permissions",
+      "version": "1.0.0",
+      "applies_to": [
+        "mobile"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test denied/revoked permissions",
+        "background/resume/process death",
+        "deep links and notification entry points"
+      ],
+      "evidence_required": "Device/OS, lifecycle sequence, observed state",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "localization",
+      "name": "Localization and date/time correctness",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test Nepali/English and Unicode",
+        "validate timezone/currency/rounding",
+        "inspect long text and calendar boundaries"
+      ],
+      "evidence_required": "Locale/timezone, reference calculations, formatting assertions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "messaging",
+      "name": "Notifications and integrations",
+      "version": "1.0.0",
+      "applies_to": [
+        "messaging"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test recipient/tenant routing",
+        "duplicate/delayed delivery",
+        "revoked subscriptions and provider failures"
+      ],
+      "evidence_required": "Sandbox recipient IDs, event IDs, delivery assertions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "finance",
+      "name": "Payments and financial correctness",
+      "version": "1.0.0",
+      "applies_to": [
+        "payments"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Reconcile totals/tax/discount/rounding",
+        "test pending/failed/reversed payments",
+        "verify refunds and ledger consistency"
+      ],
+      "evidence_required": "Sandbox transaction IDs, expected calculations, reconciliation",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "files",
+      "name": "Files, uploads and exports",
+      "version": "1.0.0",
+      "applies_to": [
+        "files"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Validate type/size/ownership",
+        "test corrupted and large fixtures",
+        "verify export encoding and download permissions"
+      ],
+      "evidence_required": "File digest, limits, authorization evidence",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "search",
+      "name": "Search, filtering and reports",
+      "version": "1.0.0",
+      "applies_to": [
+        "search"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Compare aggregates with known dataset",
+        "test pagination/filter combinations",
+        "verify sorting and access filtering"
+      ],
+      "evidence_required": "Seed dataset, expected totals, query/filter parameters",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "privacy",
+      "name": "Privacy and data lifecycle",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Inspect logs and responses for sensitive fields",
+        "test configured retention/deletion",
+        "review unnecessary collection"
+      ],
+      "evidence_required": "Masked field observations, deletion verification, retention policy",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "observability",
+      "name": "Logging and operational diagnosis",
+      "version": "1.0.0",
+      "applies_to": [
+        "api"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Correlate request and error events",
+        "verify actionable alerts",
+        "check redaction and audit completeness"
+      ],
+      "evidence_required": "Correlation IDs, test alert, redaction assertions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment and configuration",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test startup/health/readiness",
+        "check environment separation",
+        "detect debug settings and missing configuration"
+      ],
+      "evidence_required": "Build digest, environment checks, health assertions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "backup",
+      "name": "Backup and restore",
+      "version": "1.0.0",
+      "applies_to": [
+        "database"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Restore to an isolated environment",
+        "verify record integrity",
+        "measure recovery against agreed objectives"
+      ],
+      "evidence_required": "Backup ID, restore log, reconciliation, measured recovery",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment",
+        "Isolated environment and explicit load/fault/recovery limits"
+      ],
+      "environment": "isolated_copy",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "exploratory",
+      "name": "Exploratory and usability review",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Time-box risk-focused charters",
+        "investigate unexpected behavior",
+        "review user confusion and recovery paths"
+      ],
+      "evidence_required": "Charter, session notes, reproducible findings, human reviewer",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "human_plus_automation",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "regression",
+      "name": "Regression and change-impact review",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Retest repaired defects",
+        "cover dependent workflows",
+        "retain flaky evidence and broaden when impact is uncertain"
+      ],
+      "evidence_required": "Changed areas, selected tests, historical comparison",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "uat",
+      "name": "User acceptance testing",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Have representative users complete real tasks",
+        "validate business expectations",
+        "record unresolved acceptance gaps"
+      ],
+      "evidence_required": "Named reviewer, task observations, acceptance decisions",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "human_plus_automation",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "ai",
+      "name": "AI feature quality and isolation",
+      "version": "1.0.0",
+      "applies_to": [
+        "ai"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test retrieval correctness and unsupported claims",
+        "check cross-user context separation",
+        "use controlled prompt-injection fixtures"
+      ],
+      "evidence_required": "Versioned evaluation set, model/config IDs, graded evidence",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "human_plus_automation",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "supply-chain",
+      "name": "Dependency and supply-chain review",
+      "version": "1.0.0",
+      "applies_to": [
+        "*"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Match dependencies to advisories",
+        "inspect lockfiles and provenance",
+        "assess deployability and reachability"
+      ],
+      "evidence_required": "Package/version, advisory, supported ecosystem, confidence",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    },
+    {
+      "id": "hardware",
+      "name": "Printers and external devices",
+      "version": "1.0.0",
+      "applies_to": [
+        "hardware"
+      ],
+      "implementation": "planned",
+      "execution": "manual_or_adapter_required",
+      "checks": [
+        "Test disconnect/reconnect",
+        "verify print content and duplicate prevention",
+        "test device-specific errors"
+      ],
+      "evidence_required": "Device/firmware, print-job IDs, observed output",
+      "prerequisites": [
+        "Approved expected behavior",
+        "Synthetic fixtures and scoped environment"
+      ],
+      "environment": "local_or_staging",
+      "automation": "adapter_required",
+      "completion_rule": "Pass only when configured assertions and required evidence are complete; otherwise fail, blocked, incomplete or not_run.",
+      "cleanup": "Remove/reconcile only run-owned fixtures; record cleanup failures.",
+      "existing_adapter": null,
+      "adapter_boundary": "No executable adapter for this skill is implemented."
+    }
+  ]
+}
