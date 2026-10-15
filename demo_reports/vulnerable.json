@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "run_id": "92b07b95-c652-453c-936f-6aa3457ec69d",
+  "mode": "verify",
+  "project": "Local pilot",
+  "created_at": "2026-10-14T11:34:51.802060+00:00",
+  "status": "completed",
+  "executions": [
+    {
+      "test_id": "records.cross-owner",
+      "title": "Another user can read the designated record",
+      "outcome": "failed",
+      "evidence": [
+        {
+          "step": "authorized_baseline",
+          "identity": "bob",
+          "status": 200,
+          "assertions_matched": true
+        },
+        {
+          "step": "unauthorized_probe",
+          "identity": "alice",
+          "path": "/records/record-b",
+          "status": 200,
+          "assertions_matched": true,
+          "matched_fields": [
+            "id",
+            "owner_id",
+            "marker"
+          ]
+        }
+      ],
+      "actual": "The probe identity received the designated protected resource.",
+      "contract_sha256": "c413da9d78d7604e2b02e265a70cf2ed28052247bab08515ebcc37471a312e04"
+    },
+    {
+      "test_id": "records.anonymous",
+      "title": "Anonymous access to designated record",
+      "outcome": "passed",
+      "evidence": [
+        {
+          "step": "authorized_baseline",
+          "identity": "bob",
+          "status": 200,
+          "assertions_matched": true
+        },
+        {
+          "step": "unauthorized_probe",
+          "identity": "anonymous",
+          "path": "/records/record-b",
+          "status": 401,
+          "assertions_matched": false,
+          "matched_fields": []
+        },
+        {
+          "step": "identity_rechecks",
+          "passed": true
+        }
+      ],
+      "actual": "Access denied; configured authenticated identities remain valid.",
+      "contract_sha256": "915611604b8229f493a72a708769507b217517996962e3790c16ae864561b5b3"
+    }
+  ],
+  "findings": [
+    {
+      "id": "70268ccbcf3788296a193f01d3c62b32cb1fb44c42d27275ec5bafb43ab848ee",
+      "test_id": "records.cross-owner",
+      "title": "Another user can read the designated record",
+      "severity": "high",
+      "verification": "confirmed_bypass",
+      "recommendation": "Enforce server-side authorization for this resource and retain this test as a regression check.",
+      "root_cause": "Authorization failure demonstrated; source-level cause has not been established."
+    }
+  ],
+  "coverage": {
+    "planned": 2,
+    "passed": 1,
+    "failed": 1,
+    "incomplete": 0,
+    "requests": 11
+  },
+  "limitations": [
+    "Read authorization only; no injection, write-workflow, database or mobile exploitation.",
+    "Build identifiers are supplied labels; findings apply only to the tested environment."
+  ],
+  "build_id": "fixture-v1",
+  "target": "http://127.0.0.1:8101",
+  "evidence_sha256": "34c49405bf114bd4648f0c4a3a559e2de6f6d62436332a0403c9c0678067f065"
+}

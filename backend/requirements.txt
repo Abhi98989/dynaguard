@@ -1,0 +1,8 @@
+fastapi==0.141.1
+uvicorn==0.41.0
+SQLAlchemy==2.0.52
+psycopg[binary]==3.3.3
+alembic==1.18.4
+httpx==0.28.1
+itsdangerous==2.2.0
+pytest==9.0.2

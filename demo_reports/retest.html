@@ -1,0 +1,53 @@
+<!doctype html><meta charset="utf-8"><title>DynaGuard report</title><h1>DynaGuard report</h1><p>Results apply only to the documented scope.</p><pre>{
+  &quot;schema_version&quot;: 1,
+  &quot;run_id&quot;: &quot;461d68e0-8818-4a77-9707-ba9bab27cbef&quot;,
+  &quot;mode&quot;: &quot;verify&quot;,
+  &quot;project&quot;: &quot;Local pilot&quot;,
+  &quot;created_at&quot;: &quot;2026-10-14T11:35:36.687118+00:00&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;executions&quot;: [
+    {
+      &quot;test_id&quot;: &quot;records.cross-owner&quot;,
+      &quot;title&quot;: &quot;Another user can read the designated record&quot;,
+      &quot;outcome&quot;: &quot;passed&quot;,
+      &quot;evidence&quot;: [
+        {
+          &quot;step&quot;: &quot;authorized_baseline&quot;,
+          &quot;identity&quot;: &quot;bob&quot;,
+          &quot;status&quot;: 200,
+          &quot;assertions_matched&quot;: true
+        },
+        {
+          &quot;step&quot;: &quot;unauthorized_probe&quot;,
+          &quot;identity&quot;: &quot;alice&quot;,
+          &quot;path&quot;: &quot;/records/record-b&quot;,
+          &quot;status&quot;: 403,
+          &quot;assertions_matched&quot;: false,
+          &quot;matched_fields&quot;: []
+        },
+        {
+          &quot;step&quot;: &quot;identity_rechecks&quot;,
+          &quot;passed&quot;: true
+        }
+      ],
+      &quot;actual&quot;: &quot;Access denied; configured authenticated identities remain valid.&quot;,
+      &quot;contract_sha256&quot;: &quot;c413da9d78d7604e2b02e265a70cf2ed28052247bab08515ebcc37471a312e04&quot;
+    }
+  ],
+  &quot;findings&quot;: [],
+  &quot;coverage&quot;: {
+    &quot;planned&quot;: 1,
+    &quot;passed&quot;: 1,
+    &quot;failed&quot;: 0,
+    &quot;incomplete&quot;: 0,
+    &quot;requests&quot;: 8
+  },
+  &quot;limitations&quot;: [
+    &quot;Read authorization only; no injection, write-workflow, database or mobile exploitation.&quot;,
+    &quot;Build identifiers are supplied labels; findings apply only to the tested environment.&quot;
+  ],
+  &quot;build_id&quot;: &quot;fixture-v1&quot;,
+  &quot;target&quot;: &quot;http://127.0.0.1:8101&quot;,
+  &quot;retest_of&quot;: &quot;92b07b95-c652-453c-936f-6aa3457ec69d&quot;,
+  &quot;evidence_sha256&quot;: &quot;23f11721a3af2d26973823720802c5215fff72a18944688baa3362f6bb7eb804&quot;
+}</pre>

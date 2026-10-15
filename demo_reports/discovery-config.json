@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "project": "Live Browser Discovery Demo",
+  "build_id": "discovery-v1",
+  "target": {
+    "origin": "http://127.0.0.1:58573",
+    "pinned_ips": [
+      "127.0.0.1"
+    ],
+    "allowed_paths": [
+      "/session",
+      "/api/me",
+      "/app",
+      "/asset.js"
+    ],
+    "allow_private": true
+  },
+  "identities": {
+    "member": {
+      "kind": "json_login",
+      "token_env": null,
+      "login_path": "/session",
+      "username": "member",
+      "username_field": "email",
+      "password_field": "passcode",
+      "password_env": "DYNAGUARD_TEST_PASSWORD",
+      "token_field": "session.token",
+      "session": "bearer",
+      "auth_check": {
+        "path": "/api/me",
+        "expected": {
+          "name": "demo-member"
+        }
+      }
+    }
+  },
+  "tests": [],
+  "limits": {
+    "requests": 100,
+    "seconds": 120,
+    "response_bytes": 1048576,
+    "pages": 10
+  },
+  "discovery_paths": [
+    "/app"
+  ],
+  "discovery_identity": "member"
+}

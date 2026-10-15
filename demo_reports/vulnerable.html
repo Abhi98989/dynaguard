@@ -1,0 +1,89 @@
+<!doctype html><meta charset="utf-8"><title>DynaGuard report</title><h1>DynaGuard report</h1><p>Results apply only to the documented scope.</p><pre>{
+  &quot;schema_version&quot;: 1,
+  &quot;run_id&quot;: &quot;92b07b95-c652-453c-936f-6aa3457ec69d&quot;,
+  &quot;mode&quot;: &quot;verify&quot;,
+  &quot;project&quot;: &quot;Local pilot&quot;,
+  &quot;created_at&quot;: &quot;2026-10-14T11:34:51.802060+00:00&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;executions&quot;: [
+    {
+      &quot;test_id&quot;: &quot;records.cross-owner&quot;,
+      &quot;title&quot;: &quot;Another user can read the designated record&quot;,
+      &quot;outcome&quot;: &quot;failed&quot;,
+      &quot;evidence&quot;: [
+        {
+          &quot;step&quot;: &quot;authorized_baseline&quot;,
+          &quot;identity&quot;: &quot;bob&quot;,
+          &quot;status&quot;: 200,
+          &quot;assertions_matched&quot;: true
+        },
+        {
+          &quot;step&quot;: &quot;unauthorized_probe&quot;,
+          &quot;identity&quot;: &quot;alice&quot;,
+          &quot;path&quot;: &quot;/records/record-b&quot;,
+          &quot;status&quot;: 200,
+          &quot;assertions_matched&quot;: true,
+          &quot;matched_fields&quot;: [
+            &quot;id&quot;,
+            &quot;owner_id&quot;,
+            &quot;marker&quot;
+          ]
+        }
+      ],
+      &quot;actual&quot;: &quot;The probe identity received the designated protected resource.&quot;,
+      &quot;contract_sha256&quot;: &quot;c413da9d78d7604e2b02e265a70cf2ed28052247bab08515ebcc37471a312e04&quot;
+    },
+    {
+      &quot;test_id&quot;: &quot;records.anonymous&quot;,
+      &quot;title&quot;: &quot;Anonymous access to designated record&quot;,
+      &quot;outcome&quot;: &quot;passed&quot;,
+      &quot;evidence&quot;: [
+        {
+          &quot;step&quot;: &quot;authorized_baseline&quot;,
+          &quot;identity&quot;: &quot;bob&quot;,
+          &quot;status&quot;: 200,
+          &quot;assertions_matched&quot;: true
+        },
+        {
+          &quot;step&quot;: &quot;unauthorized_probe&quot;,
+          &quot;identity&quot;: &quot;anonymous&quot;,
+          &quot;path&quot;: &quot;/records/record-b&quot;,
+          &quot;status&quot;: 401,
+          &quot;assertions_matched&quot;: false,
+          &quot;matched_fields&quot;: []
+        },
+        {
+          &quot;step&quot;: &quot;identity_rechecks&quot;,
+          &quot;passed&quot;: true
+        }
+      ],
+      &quot;actual&quot;: &quot;Access denied; configured authenticated identities remain valid.&quot;,
+      &quot;contract_sha256&quot;: &quot;915611604b8229f493a72a708769507b217517996962e3790c16ae864561b5b3&quot;
+    }
+  ],
+  &quot;findings&quot;: [
+    {
+      &quot;id&quot;: &quot;70268ccbcf3788296a193f01d3c62b32cb1fb44c42d27275ec5bafb43ab848ee&quot;,
+      &quot;test_id&quot;: &quot;records.cross-owner&quot;,
+      &quot;title&quot;: &quot;Another user can read the designated record&quot;,
+      &quot;severity&quot;: &quot;high&quot;,
+      &quot;verification&quot;: &quot;confirmed_bypass&quot;,
+      &quot;recommendation&quot;: &quot;Enforce server-side authorization for this resource and retain this test as a regression check.&quot;,
+      &quot;root_cause&quot;: &quot;Authorization failure demonstrated; source-level cause has not been established.&quot;
+    }
+  ],
+  &quot;coverage&quot;: {
+    &quot;planned&quot;: 2,
+    &quot;passed&quot;: 1,
+    &quot;failed&quot;: 1,
+    &quot;incomplete&quot;: 0,
+    &quot;requests&quot;: 11
+  },
+  &quot;limitations&quot;: [
+    &quot;Read authorization only; no injection, write-workflow, database or mobile exploitation.&quot;,
+    &quot;Build identifiers are supplied labels; findings apply only to the tested environment.&quot;
+  ],
+  &quot;build_id&quot;: &quot;fixture-v1&quot;,
+  &quot;target&quot;: &quot;http://127.0.0.1:8101&quot;,
+  &quot;evidence_sha256&quot;: &quot;34c49405bf114bd4648f0c4a3a559e2de6f6d62436332a0403c9c0678067f065&quot;
+}</pre>

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "run_id": "461d68e0-8818-4a77-9707-ba9bab27cbef",
+  "mode": "verify",
+  "project": "Local pilot",
+  "created_at": "2026-10-14T11:35:36.687118+00:00",
+  "status": "completed",
+  "executions": [
+    {
+      "test_id": "records.cross-owner",
+      "title": "Another user can read the designated record",
+      "outcome": "passed",
+      "evidence": [
+        {
+          "step": "authorized_baseline",
+          "identity": "bob",
+          "status": 200,
+          "assertions_matched": true
+        },
+        {
+          "step": "unauthorized_probe",
+          "identity": "alice",
+          "path": "/records/record-b",
+          "status": 403,
+          "assertions_matched": false,
+          "matched_fields": []
+        },
+        {
+          "step": "identity_rechecks",
+          "passed": true
+        }
+      ],
+      "actual": "Access denied; configured authenticated identities remain valid.",
+      "contract_sha256": "c413da9d78d7604e2b02e265a70cf2ed28052247bab08515ebcc37471a312e04"
+    }
+  ],
+  "findings": [],
+  "coverage": {
+    "planned": 1,
+    "passed": 1,
+    "failed": 0,
+    "incomplete": 0,
+    "requests": 8
+  },
+  "limitations": [
+    "Read authorization only; no injection, write-workflow, database or mobile exploitation.",
+    "Build identifiers are supplied labels; findings apply only to the tested environment."
+  ],
+  "build_id": "fixture-v1",
+  "target": "http://127.0.0.1:8101",
+  "retest_of": "92b07b95-c652-453c-936f-6aa3457ec69d",
+  "evidence_sha256": "23f11721a3af2d26973823720802c5215fff72a18944688baa3362f6bb7eb804"
+}

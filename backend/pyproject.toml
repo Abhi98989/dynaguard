@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynaguard"
+version = "0.2.0"
+description = "Local source review and evidence-backed application authorization testing"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.28,<0.29", "pydantic>=2.12,<3"]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.48,<2"]
+
+[project.scripts]
+dynaguard = "dynaguard.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dynaguard*"]

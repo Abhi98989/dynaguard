@@ -1,0 +1,42 @@
+name: Deploy DynaGuard to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Live Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            echo "🚀 Starting DynaGuard deployment..."
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "📥 Pulling latest changes from main..."
+            git pull origin main
+
+            echo "📦 Building and restarting containers..."
+            docker compose down
+            docker compose build
+            docker compose up -d
+
+            echo "🔍 Verifying running services..."
+            docker compose ps
+
+            echo "✅ Deployment completed successfully!"

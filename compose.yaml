@@ -1,0 +1,110 @@
+name: dynaguard
+
+x-backend: &backend
+  image: dynaguard-backend:local
+  pull_policy: never
+  read_only: true
+  tmpfs: [/tmp:size=32m]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  mem_limit: 256m
+  cpus: 0.5
+  pids_limit: 64
+
+x-control-env: &control-env
+  DATABASE_URL: postgresql+psycopg://dynaguard:${POSTGRES_PASSWORD:?Run python scripts/setup.py first}@db:5432/dynaguard
+  TARGETS_JSON: '{"http://fixture-vulnerable:8000":["172.30.91.10"],"http://fixture-fixed:8000":["172.30.91.11"]}'
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dynaguard
+      POSTGRES_USER: dynaguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup first}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [control]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U dynaguard -d dynaguard']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *backend
+    environment: *control-env
+    command: [alembic, upgrade, head]
+    networks: [control]
+    depends_on:
+      db: {condition: service_healthy}
+
+  api:
+    <<: *backend
+    build: ./backend
+    environment:
+      <<: *control-env
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Run setup first}
+      SESSION_SECRET: ${SESSION_SECRET:?Run setup first}
+    networks: [control]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  worker:
+    <<: *backend
+    environment:
+      <<: *control-env
+      FIXTURE_PASSWORD: ${FIXTURE_PASSWORD:?Run setup first}
+    command: [python, -m, app.worker]
+    networks: [control, fixtures]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      fixture-vulnerable: {condition: service_started}
+      fixture-fixed: {condition: service_started}
+
+  fixture-vulnerable:
+    <<: *backend
+    environment:
+      FIXTURE_MODE: vulnerable
+      FIXTURE_PASSWORD: ${FIXTURE_PASSWORD:?Run setup first}
+    command: [uvicorn, fixture.main:app, --host, 0.0.0.0, --port, '8000', --no-access-log]
+    networks:
+      fixtures: {ipv4_address: 172.30.91.10}
+
+  fixture-fixed:
+    <<: *backend
+    environment:
+      FIXTURE_MODE: fixed
+      FIXTURE_PASSWORD: ${FIXTURE_PASSWORD:?Run setup first}
+    command: [uvicorn, fixture.main:app, --host, 0.0.0.0, --port, '8000', --no-access-log]
+    networks:
+      fixtures: {ipv4_address: 172.30.91.11}
+
+  dashboard:
+    image: dynaguard-dashboard:local
+    build: ./dashboard
+    environment:
+      API_BASE_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: '1'
+    ports: [127.0.0.1:3000:3000]
+    networks: [edge, control]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      api: {condition: service_healthy}
+
+networks:
+  edge:
+  control:
+    internal: true
+  fixtures:
+    internal: true
+    ipam:
+      config: [{subnet: 172.30.91.0/24}]
+
+volumes:
+  postgres-data:

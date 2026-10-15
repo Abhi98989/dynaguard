@@ -1,0 +1,2284 @@
+From d31f374cda024f80fcb7f2399ce707ab290192f4 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 14 Oct 2026 13:15:42 +0200
+Subject: [PATCH] Add shared verification engine, CLI and dashboard integration
+
+---
+ .gitignore                                    |   5 +
+ README.md                                     | 255 +++++++++++++-----
+ backend/Dockerfile.browser                    |   9 +
+ backend/app/api.py                            |   4 +
+ backend/app/engine_api.py                     | 119 ++++++++
+ backend/app/engine_worker.py                  |  66 +++++
+ backend/app/models.py                         |  13 +
+ backend/app/worker.py                         |   4 +
+ backend/dynaguard/__init__.py                 |   2 +
+ backend/dynaguard/__main__.py                 |   2 +
+ backend/dynaguard/cli.py                      | 103 +++++++
+ backend/dynaguard/config.py                   | 118 ++++++++
+ backend/dynaguard/discovery.py                |  78 ++++++
+ backend/dynaguard/engine.py                   | 147 ++++++++++
+ backend/dynaguard/network.py                  |  97 +++++++
+ backend/dynaguard/source.py                   |  72 +++++
+ backend/dynaguard/starter.py                  |  14 +
+ .../migrations/versions/0002_shared_engine.py |  26 ++
+ backend/pyproject.toml                        |  19 ++
+ backend/tests/test_engine.py                  | 206 ++++++++++++++
+ backend/tests/test_engine_api.py              |  71 +++++
+ compose.browser.yaml                          |  12 +
+ dashboard/app/engine-panel.tsx                |  75 ++++++
+ dashboard/app/page.tsx                        |   8 +-
+ docs/CONFIGURATION.md                         | 113 ++++++++
+ docs/LEGACY_FIXTURE.md                        | 110 ++++++++
+ docs/SYSTEM_LOGIC.md                          | 100 +++++++
+ docs/VERIFICATION_SHARED_ENGINE.md            |  43 +++
+ examples/fixture.json                         |  78 ++++++
+ 29 files changed, 1895 insertions(+), 74 deletions(-)
+ create mode 100644 backend/Dockerfile.browser
+ create mode 100644 backend/app/engine_api.py
+ create mode 100644 backend/app/engine_worker.py
+ create mode 100644 backend/dynaguard/__init__.py
+ create mode 100644 backend/dynaguard/__main__.py
+ create mode 100644 backend/dynaguard/cli.py
+ create mode 100644 backend/dynaguard/config.py
+ create mode 100644 backend/dynaguard/discovery.py
+ create mode 100644 backend/dynaguard/engine.py
+ create mode 100644 backend/dynaguard/network.py
+ create mode 100644 backend/dynaguard/source.py
+ create mode 100644 backend/dynaguard/starter.py
+ create mode 100644 backend/migrations/versions/0002_shared_engine.py
+ create mode 100644 backend/pyproject.toml
+ create mode 100644 backend/tests/test_engine.py
+ create mode 100644 backend/tests/test_engine_api.py
+ create mode 100644 compose.browser.yaml
+ create mode 100644 dashboard/app/engine-panel.tsx
+ create mode 100644 docs/CONFIGURATION.md
+ create mode 100644 docs/LEGACY_FIXTURE.md
+ create mode 100644 docs/SYSTEM_LOGIC.md
+ create mode 100644 docs/VERIFICATION_SHARED_ENGINE.md
+ create mode 100644 examples/fixture.json
+
+diff --git a/.gitignore b/.gitignore
+index efe992b..f75f01d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -10,3 +10,8 @@ node_modules/
+ artifacts/
+ .npm-cache/
+ .test-deps/
++
++*.egg-info/
++dynaguard.json
++dynaguard-*-report.json
++dynaguard-report.html
+diff --git a/README.md b/README.md
+index 05b4cd1..20e8b54 100644
+--- a/README.md
++++ b/README.md
+@@ -1,110 +1,223 @@
+-# DynaGuard foundation
++# DynaGuard
+ 
+-An internal, local security-validation pilot for Dynamatrix. This milestone implements one real permission test and its evidence/retest cycle against synthetic fixtures. DynaFlow integration comes later.
++DynaGuard is an internal security-validation tool with a **local terminal CLI and a web dashboard using the same Python engine**. It reviews selected source patterns, performs configured read-permission tests against running applications, and records what each test actually proved.
+ 
+-## Start with Docker Compose
++This release replaces the fixture-only restriction for new shared-engine runs. The original Alice/Bob demo and its historical results remain available separately.
+ 
+-Prerequisites: Docker Desktop running Linux containers, Docker Compose, Python 3.12+ for the secret-setup helper, and at least 5 GiB free for initial images/build caches (more if Docker needs to grow its virtual disk). Nothing is deployed publicly.
++**A completed run is not a declaration that an application is secure.** The reports distinguish suspected source issues, confirmed permission bypasses, passed assertions, and incomplete checks.
+ 
+-From the project root:
++## What works in this release
+ 
+-```powershell
+-python scripts/setup.py
+-if ($LASTEXITCODE -eq 0) { docker compose up --build -d }
++| Capability | CLI | Dashboard | Boundaries |
++|---|---|---|---|
++| Source review | Repository directory | Selected text-file upload | Seven heuristic patterns; no dataflow or dependency advisory engine |
++| HTTP/HTTPS permission tests | JSON configuration | Same JSON configuration | Read access to designated synthetic resources |
++| Authentication | Anonymous, bearer token, JSON login | Same | JSON login supports bearer response or session cookies; no OAuth/MFA/form automation |
++| Multiple tests per run | Yes | Yes | Shared-engine reports retain separate executions and findings |
++| Browser discovery | Optional Playwright extra | Optional browser worker | Renders explicitly listed pages, lists links and captures permitted requests |
++| Frontend exposure review | Through browser discovery | Through browser discovery | Heuristic inspection of delivered text/JS/JSON; secret values omitted |
++| Evidence/reporting | JSON and escaped HTML | JSON report/download and evidence viewer | Root causes are not invented from a status code |
++| Retest | Repeat one unchanged test contract | Edit build label and start a new shared-engine run | Automatic linked retest is CLI-only for new engine runs; legacy UI retests remain |
++| Cancellation | Ctrl+C | Cancel queued/running jobs | Incomplete/cancelled runs do not count as passes |
++
++Not implemented: general injection exploitation, write-workflow manipulation, attack-chain planning, database connections/policy adapters, mobile analysis, repository Git-history scanning, Semgrep/Trivy/ZAP integrations, automatic code repair or AI root-cause analysis. Database-related source patterns are heuristics, not a database security audit.
++
++## Quick start: local CLI
++
++Python **3.12+** is required. Run from the repository root:
++
++```bash
++python -m venv .venv
+ ```
+ 
+-The setup helper asks you to choose an administrator password of at least 16 characters. Input is hidden while you type; short or mismatched passwords prompt you to retry. It stores its scrypt hash, plus generated local service secrets, in the ignored `.env` file. It does not print the password. Existing `.env` files are preserved. Once setup has already succeeded, start directly with `docker compose up --build -d`.
++Activate the environment:
+ 
+-Open **http://127.0.0.1:3000**, sign in as **admin**, and use your chosen password. Startup applies the PostgreSQL migration before starting the API or worker. PostgreSQL data persists in a Docker volume.
++```bash
++# macOS/Linux
++source .venv/bin/activate
++```
+ 
+ ```powershell
+-docker compose ps
+-docker compose logs --tail=50 api worker
+-docker compose down
++# Windows PowerShell
++.\.venv\Scripts\Activate.ps1
+ ```
+ 
+-`down` stops services and retains database records. Fixtures have no host ports. Only the dashboard is published, bound to loopback. If Docker reports a subnet conflict, change both the fixture subnet/static IPs and `TARGETS_JSON` in `compose.yaml` together.
++Install the CLI and scan a local repository:
+ 
+-## Walk through the milestone
++```bash
++python -m pip install -e ./backend
++dynaguard scan source --path /path/to/your/project --output source-report.json
++dynaguard report --input source-report.json --output source-report.html
++```
+ 
+-1. Create a project named `DynaFlow local pilot`.
+-2. Configure an environment named `Vulnerable fixture`, select `http://fixture-vulnerable:8000`, and enter build identifier `fixture-vulnerable-v1`.
+-3. Configure a second environment named `Fixed fixture`, select `http://fixture-fixed:8000`, and enter `fixture-fixed-v1`.
+-4. Start the vulnerable scan. Open its run: the execution should be **failed**, with a **confirmed_bypass** finding. `completed` is the orchestration state, not a passing security result.
+-5. Open the finding and its masked evidence. The authorized Alice record baseline must succeed, then Bob's designated record and marker must be returned to confirm the bypass.
+-6. In the finding, select `Fixed fixture` and click **Run retest**. The same test must **pass**: access to Bob's record is denied, and Alice can still access her own record afterward.
+-7. The original finding becomes **verified fixed**, with the original evidence and retest history retained. Open the JSON report from the run.
++Use a quoted Windows path such as `--path "C:\Projects\DynaFlow"` where applicable. No dashboard account, database or source upload is required for CLI scans. The CLI does not install or execute the scanned project's dependencies.
+ 
+-Scope: one synthetic ownership boundary. An empty finding list is not a claim that a product is secure. An unavailable target, failed login, lost authentication, unexpected response, exhausted limit, crashed worker, or deadline produces **incomplete**. Cancellation is a separate non-passing result.
++### Configure a running application
+ 
+-## Architecture and data
++```bash
++dynaguard init --output dynaguard.json
++```
+ 
+-- `dashboard/`: Next.js App Router + TypeScript. Same-origin API proxy; credentials are not placed in browser storage. Minimal project, environment, run, finding, evidence, and retest views.
+-- `backend/app/api.py`: FastAPI control plane. Administrator session cookie, CSRF boundary, project/target/policy registration, run requests, reports and cancellation.
+-- `backend/app/worker.py`: separate process/container, claiming PostgreSQL jobs with row locks and `SKIP LOCKED`. Executes only the fixed test catalog; no supplied scripts or shell commands. No Redis/Celery is needed for this single-test milestone.
+-- `backend/app/scope.py`: exact origin/path checks, deployment-pinned IPv4 addresses, checks every redirect, connects to the verified IP, disables proxy environment inheritance, bounds requests, response size and duration.
+-- `backend/app/verification.py`: authorized baseline, cross-owner probe, protected-record assertions and legitimate-access recheck.
+-- `backend/fixture/main.py`: two synthetic users (`alice`, `bob`), two projects and two designated records. Vulnerable and corrected instances differ only in the ownership guard. No real accounts or services.
+-- `backend/migrations/`: Alembic initial schema and reversible migration. Models include Project, Environment/allowed target, ScanPolicy, ScanRun, TestExecution, Finding, Evidence and CredentialReference. Each child carries project identity. Retests reference the original finding.
++This creates a **local fixture example**, not a ready-made configuration for DynaFlow. Edit it for your actual environment. Never put passwords or private tokens directly in JSON. Use environment-variable references such as `DYNAGUARD_TEST_MEMBER_PASSWORD`.
+ 
+-Policies/environments are immutable through the current API. Each run freezes its target, build label, credential reference, test/version and limits. Evidence stores selected, redacted request/response proof fields with timestamps and a SHA-256 integrity hash. It intentionally excludes raw login responses, arbitrary response text and headers. The database stores `fixture/alice`, never the fixture password or access token.
++```bash
++dynaguard verify --config dynaguard.json --output verification.json
++dynaguard report --input verification.json --output verification.html
++```
+ 
+-Administrator authentication uses a salted scrypt password hash, an eight-hour signed HttpOnly SameSite=Strict cookie, a login-attempt limit and a custom mutation header with same-origin protections. Cookies use HTTP for loopback development; any future HTTPS deployment must enable `COOKIE_SECURE=true` on the API. The administrator can access all projects in this single-organization pilot.
++Before running, define the referenced test credentials in your shell or secret-management environment. The target must be running; DynaGuard does not launch an arbitrary repository's application automatically.
+ 
+-The trusted worker runs one test at a time. Its cancellation monitor checks about every 100 ms and cancels the active HTTP task, closing the client before acknowledging completion. A test has a default 15-second overall budget, three-second per-request ceiling, eight-request limit and 16 KiB maximum decoded response. An abandoned worker lease is marked incomplete after 40 seconds by a live worker; if all workers are offline, reconciliation happens when one restarts. No automatic test retries.
++CLI exit codes:
+ 
+-## Local development without Docker
++- `0`: all selected work completed with no findings. Only the stated coverage applies.
++- `1`: work completed with findings, including suspected heuristic findings.
++- `2`: configuration/operational error or incomplete work. Findings may still exist in a partial report.
++- `130`: interrupted by the operator.
+ 
+-This fallback uses SQLite and one worker for local debugging. PostgreSQL/Compose is the intended deployment configuration; SQLite does not verify PostgreSQL concurrency or container isolation.
++### Reproduce the included local permission test
+ 
+-```powershell
+-python -m venv .venv
+-.\.venv\Scripts\python -m pip install -r backend/requirements.txt
+-npm.cmd --prefix dashboard ci
++Install the backend dependencies, then start the synthetic fixture in one terminal:
++
++```bash
++python -m pip install -r backend/requirements.txt
++# Set FIXTURE_PASSWORD to a disposable test-only password in this terminal.
++# Set FIXTURE_MODE=vulnerable for the initial demonstration.
++cd backend
++python -m uvicorn fixture.main:app --host 127.0.0.1 --port 8101 --no-access-log
++```
++
++In another activated terminal, with the same `FIXTURE_PASSWORD` environment value:
++
++```bash
++dynaguard verify --config examples/fixture.json --output vulnerable.json
++```
++
++Stop the fixture, set `FIXTURE_MODE=fixed`, and restart it at the same address. Then:
++
++```bash
++dynaguard retest --config examples/fixture.json --report vulnerable.json --test-id records.cross-owner --output retest.json
++```
++
++The retest checks the same project, target and test-contract hash. A changed test must run as a new scan. The original report is never overwritten by retesting unless you explicitly choose the same output filename; use distinct output files.
++
++The fixture is deliberately vulnerable in one mode. Keep it bound to loopback or the isolated Compose network.
++
++## Web dashboard
++
++The existing local dashboard remains available:
++
++```bash
+ python scripts/setup.py
+-.\.venv\Scripts\python scripts/dev.py
++docker compose up --build -d
+ ```
+ 
+-On macOS/Linux, use `.venv/bin/python` and `npm`. The launcher runs migrations, fixtures on `127.0.0.1:8101` / `:8102`, API on `:8000`, worker, and dashboard on `:3000`. Select those loopback targets in the dashboard. Ctrl+C stops the launched processes. Do not run this and Compose on port 3000 simultaneously.
++Open **http://127.0.0.1:3000** and use the administrator password chosen during setup. Database migrations run before the API and worker start.
+ 
+-## Verification commands
++1. Create/select a project.
++2. Open **Shared engine · configurable application tests**.
++3. Edit the JSON configuration: origin, pinned addresses, allowed paths, identities and resource assertions.
++4. Select **Verify permissions** or **Discover live pages**.
++5. Expand the run to see coverage, individual outcomes, findings, evidence and limitations.
++6. Download the report or cancel unfinished work.
+ 
+-```powershell
+-# Acceptance/unit tests (temporary SQLite database; actual ASGI fixtures)
+-Set-Location backend
+-..\.venv\Scripts\python -m unittest discover -s tests -v
+-Set-Location ..
++The selected-source upload accepts at most 100 files and a server request body of 2 MiB. File contents go to your DynaGuard server, are scanned in a temporary directory and then deleted. Reports omit source snippets and secret values. Use the CLI for large repositories or when code must stay on your machine.
+ 
+-# Separate fixture/API/worker processes, real loopback HTTP, migrated temporary DB
+-.\.venv\Scripts\python scripts/smoke.py
++### Register a real staging target
+ 
+-# Next.js production compilation and TypeScript checks
+-npm.cmd --prefix dashboard run build
+-npm.cmd --prefix dashboard run typecheck
++The default Compose setup still has isolated fixture-only networks. **A public URL will not become reachable just because it is pasted into the UI.** This prevents the dashboard from turning into an unrestricted network requester.
+ 
+-# Actual isolated Compose project, PostgreSQL, worker, dashboard proxy
+-# Uses port 3000; removes only its own dynaguard-acceptance-* test volume afterward.
+-.\.venv\Scripts\python scripts/compose_smoke.py
++For a real staging application:
++
++- Put the exact origin and its expected IP addresses in the API and worker's `TARGETS_JSON` deployment variable. Example shape: `{"https://staging.example.com":["<actual-IP>"]}`. Replace the placeholder with the deployment's real address; do not copy it literally.
++- Provide credential variables only to the worker, named `DYNAGUARD_TEST_*`. The fixture password reference is retained for the demo.
++- Give the worker network access to that staging target through an appropriate restricted runner/network configuration. Do not remove all network isolation or connect it to unrelated management services.
++- Match the origin and complete IP-pin set in the UI JSON. The worker revalidates them before execution.
++- Use trusted staging TLS certificates. Certificate/hostname verification stays enabled; there is no insecure TLS switch.
++- For explicitly owned local/private targets, set `allow_private: true`. Link-local/cloud-metadata, multicast and unspecified addresses remain prohibited.
++
++The standalone CLI uses your locally reviewed JSON as its scope policy; it does not read the dashboard registry. CDN address changes require a deliberate pin update.
++
++### Optional live-page browser discovery
++
++Install in your activated CLI environment:
++
++```bash
++python -m pip install -e './backend[browser]'
++python -m playwright install chromium
++```
++
++Set `discovery_identity` and `discovery_paths` in the JSON. Include the exact needed page, asset and API paths in `allowed_paths`; an entry ending in `/` permits descendants of that prefix. Avoid granting `/` unless you intend to permit every path on that origin.
++
++```bash
++dynaguard discover --config dynaguard.json --output discovery.json
++```
++
++For a containerized browser worker:
++
++```bash
++docker compose -f compose.yaml -f compose.browser.yaml up --build -d
++```
++
++This optional image is larger and needs browser dependencies and more memory. Its default network is still fixture-only. A trusted deployment can instead set `DYNAGUARD_CHROMIUM_EXECUTABLE` to an installed compatible Chrome/Chromium executable.
++
++Discovery renders configured pages and captures JavaScript-initiated GET/HEAD requests through the scoped transport. It does not click buttons, submit forms, follow discovered links automatically or perform write requests. WebSockets and service workers are disabled. Blocked/missing assets and navigation failures yield incomplete coverage. SPA flows requiring localStorage auth state, OAuth redirects or interactive MFA need a future authentication adapter.
++
++Browser routing is not an operating-system sandbox. Use a dedicated restricted runner for untrusted applications. Do not publish the current internal pilot as a public scanning service.
++
++## How to configure tests
++
++See [configuration guide](docs/CONFIGURATION.md) and [system logic](docs/SYSTEM_LOGIC.md).
++
++A permission test contains:
++
++- An authenticated identity that should have access.
++- Another identity (or anonymous user) that should not have access.
++- A resource URL and nonempty JSON-field assertions identifying a **synthetic** protected record.
++- Identity health checks to distinguish a permission denial from an expired session.
++
++A confirmed bypass requires the unauthorized response to match the configured protected-resource assertions. An HTTP 200 alone is never enough. A source-pattern match is never labeled a confirmed runtime bypass.
++
++## Repository layout
++
++```text
++backend/dynaguard/       Shared CLI, configuration, transport, verification, source and browser modules
++backend/app/            Dashboard API, persistence and background workers
++backend/migrations/     Existing fixture schema plus shared-engine run migration
++backend/tests/          Legacy and shared-engine acceptance tests
++backend/fixture/        Local synthetic application
++dashboard/app/         Next.js dashboard and shared-engine panel
++examples/               Example data-only configuration
++docs/                   System logic, configuration and historical setup
+ ```
+ 
+-`scripts/smoke.py --serve` keeps a disposable populated demo at **http://127.0.0.1:3001** for browser QA after a dashboard build. It uses the public synthetic test credential defined in that script, not your development administrator password. Stop it with Ctrl+C. It never modifies `.env` or the development database.
++## Verification
++
++From an activated environment with backend dependencies installed:
+ 
+-With that disposable demo running, run `npx playwright test` from `dashboard/`. The test uses the installed Microsoft Edge browser, creates a project and environments through the UI, inspects evidence, verifies the fixed retest and signs out. Set `TEST_BROWSER_CHANNEL=chrome` to use an installed Chrome instead. The screenshot is saved under `artifacts/dynaguard-milestone.png`.
++```bash
++cd backend
++python -m unittest discover -s tests -v
++python -m alembic upgrade head
++python -m alembic check
++```
++
++Run migrations only against your intended local/test database. For browser integration tests, install Chromium and set `DYNAGUARD_BROWSER_TEST=1` before running the suite. That test starts a separate local HTTP application with different routes/login fields, renders its JavaScript page, and checks captured authenticated API traffic.
+ 
+-The tests cover vulnerable/fixed results, evidence hashes, retest history, failed login, unavailable targets, failed baselines, ambiguous HTTP 200s, authentication expiry, scope/redirect/DNS blocking, limits, masking, administrator/CSRF checks, project-policy boundaries, cancellation and worker loss.
++```bash
++cd dashboard
++npm ci
++npm run build
++npm run typecheck
++```
+ 
+-The Compose verification builds images sequentially and stops if free space drops below 512 MiB. It additionally checks actual PostgreSQL job locking, unavailable targets, failed fixture login, queued cancellation, non-root/read-only worker and fixture containers, absence of their host ports, and internal control/fixture networks. With application images already built, `--skip-build` reuses them. Keep the default 5 GiB initial space requirement for fresh builds; `--minimum-free-gib` is intended for retries with cached images/layers. Execution results and any outstanding checks are recorded in `VERIFICATION.md`.
++See [current verification record](docs/VERIFICATION_SHARED_ENGINE.md) for what was independently run and what remains unverified. The root `VERIFICATION.md` describes the earlier fixture milestone.
+ 
+-## Remaining boundaries
++## Next implementation steps
+ 
+-- This is a local pilot, not a hardened production deployment. No DynaFlow repository or real target has been scanned.
+-- Only the fixed synthetic permission-test contract is supported. No AI, general scanners, mobile testing, source analysis or arbitrary URL entry.
+-- The Compose networks isolate fixtures from external routing. The trusted worker still shares a control network and database with the API; a separate scope gateway, restricted database roles, per-run disposable containers and separate runner VM are future hardening work before integrating untrusted tools.
+-- Local secrets use process environment variables and an ignored `.env`; a managed secret store, evidence encryption/retention/deletion, audit log, backups and multi-user RBAC remain future work.
+-- Evidence is stored as redacted JSON in PostgreSQL for this small milestone, not object storage. The SHA-256 hash detects content changes when compared but is not a signature against a database administrator.
+-- Build identifiers are administrator-supplied labels, not independently verified artifact digests. “Verified fixed” applies to the selected retested fixture build, not every environment.
+-- Session logout clears the browser cookie; there is no server-side session revocation store. Login throttling is in-process. Container images are version-tagged; image-digest pinning and a reviewed dependency-update pipeline remain future work.
++1. Validate the browser worker and container networking in your deployment.
++2. Connect DynaFlow staging and define its real roles/resources without changing engine code.
++3. Add guided authentication/configuration forms and linked dashboard retests.
++4. Integrate mature source/dependency scanners and authenticated ZAP scanning.
++5. Add dedicated database, workflow and mobile adapters with appropriate test fixtures.
+ 
+-Implementation references: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [SQLAlchemy locking/selects](https://docs.sqlalchemy.org/en/20/core/selectable.html). The supplied design plan remains the broader roadmap.
+-#   d y n a g u a r d  
+- 
+\ No newline at end of file
++There is no “bypass all security” mode. Each new capability must have an explicit contract, a vulnerable fixture, a secure counterpart and inspectable evidence.
+diff --git a/backend/Dockerfile.browser b/backend/Dockerfile.browser
+new file mode 100644
+index 0000000..e312f2d
+--- /dev/null
++++ b/backend/Dockerfile.browser
+@@ -0,0 +1,9 @@
++FROM python:3.12-slim
++ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
++WORKDIR /app
++COPY requirements.txt .
++RUN pip install --no-cache-dir -r requirements.txt
++COPY . .
++RUN pip install --no-cache-dir '.[browser]' && python -m playwright install --with-deps chromium && useradd --uid 10001 --create-home app
++USER 10001
++CMD ["python", "-m", "app.worker"]
+diff --git a/backend/app/api.py b/backend/app/api.py
+index aa150d0..b154028 100644
+--- a/backend/app/api.py
++++ b/backend/app/api.py
+@@ -198,3 +198,7 @@ def finding_detail(finding_id: str, session=Depends(db)):
+ @app.get('/scan-runs/{run_id}/report', dependencies=[Depends(require_admin)])
+ def report(run_id: str, session=Depends(db)):
+     return run_detail(run_id, session)
++
++# New shared-engine endpoints coexist with historical fixture-run endpoints.
++from .engine_api import router as engine_router
++app.include_router(engine_router)
+diff --git a/backend/app/engine_api.py b/backend/app/engine_api.py
+new file mode 100644
+index 0000000..793c7dc
+--- /dev/null
++++ b/backend/app/engine_api.py
+@@ -0,0 +1,119 @@
++"""Dashboard adapter for the same engine used by the local CLI."""
++import json
++from pathlib import Path
++import tempfile
++from typing import Literal
++from fastapi import APIRouter, Depends, HTTPException, Request
++from pydantic import BaseModel, ConfigDict
++from sqlalchemy import select
++from dynaguard.config import ProjectConfig
++from dynaguard.source import scan_source
++from . import config
++from .models import EngineRun, Project
++from .security import require_admin
++from .db import Session
++
++router = APIRouter(dependencies=[Depends(require_admin)])
++
++
++def db():
++    with Session() as session:
++        yield session
++
++
++def project(session, project_id):
++    if session.get(Project, project_id) is None:
++        raise HTTPException(404, 'Project not found')
++
++
++def dump(row):
++    return {c.name: getattr(row, c.name) for c in row.__table__.columns}
++
++
++class RunInput(BaseModel):
++    model_config = ConfigDict(extra='forbid')
++    mode: Literal['verify', 'discover']
++    config: ProjectConfig
++
++
++def validate_deployment_scope(contract):
++    pins = config.targets().get(contract.target.origin)
++    if not pins or set(contract.target.pinned_ips) != set(pins):
++        raise HTTPException(422, 'Origin and IP pins must match the deployment-owned TARGETS_JSON registry')
++    for identity in contract.identities.values():
++        for reference in (identity.password_env, identity.token_env):
++            if reference and reference != 'FIXTURE_PASSWORD' and not reference.startswith('DYNAGUARD_TEST_'):
++                raise HTTPException(422, 'Worker credential references must start with DYNAGUARD_TEST_')
++
++
++@router.post('/projects/{project_id}/engine-runs', status_code=201)
++def create_run(project_id: str, body: RunInput, session=Depends(db)):
++    project(session, project_id)
++    validate_deployment_scope(body.config)
++    row = EngineRun(project_id=project_id, mode=body.mode, config=body.config.model_dump())
++    session.add(row)
++    session.commit()
++    return dump(row)
++
++
++@router.get('/projects/{project_id}/engine-runs')
++def list_runs(project_id: str, session=Depends(db)):
++    project(session, project_id)
++    return [dump(r) for r in session.scalars(select(EngineRun).where(EngineRun.project_id == project_id).order_by(EngineRun.created_at.desc()).limit(100))]
++
++
++@router.post('/engine-runs/{run_id}/cancel')
++def cancel(run_id: str, session=Depends(db)):
++    row = session.scalar(select(EngineRun).where(EngineRun.id == run_id).with_for_update())
++    if not row:
++        raise HTTPException(404, 'Run not found')
++    if row.status in ('queued', 'running'):
++        row.cancel_requested = True
++        if row.status == 'queued':
++            row.status = 'cancelled'
++    session.commit()
++    return dump(row)
++
++
++@router.post('/projects/{project_id}/source-review', status_code=201)
++async def source_review(project_id: str, request: Request, session=Depends(db)):
++    project(session, project_id)
++    data = bytearray()
++    async for chunk in request.stream():
++        data.extend(chunk)
++        if len(data) > 2 * 1024 * 1024:
++            raise HTTPException(413, 'Source upload limit is 2 MiB')
++    try:
++        files = json.loads(data)['files']
++        if not isinstance(files, list) or not 1 <= len(files) <= 100:
++            raise ValueError()
++        with tempfile.TemporaryDirectory() as directory:
++            seen = set()
++            for item in files:
++                path = Path(item['path'])
++                if path.is_absolute() or '..' in path.parts or '\\' in str(path) or not path.name or str(path) in seen:
++                    raise ValueError()
++                seen.add(str(path))
++                destination = Path(directory) / path
++                destination.parent.mkdir(parents=True, exist_ok=True)
++                destination.write_text(item['content'], encoding='utf-8')
++            report = scan_source(directory)
++        report['project'] = session.get(Project, project_id).name
++    except (ValueError, KeyError, TypeError, OSError):
++        raise HTTPException(422, 'Invalid source file upload') from None
++    row = EngineRun(project_id=project_id, mode='source', status=report['status'], stage='Source review completed', config={}, report=report)
++    session.add(row)
++    session.commit()
++    return dump(row)
++
++
++@router.get('/engine-template')
++def template():
++    from dynaguard.starter import starter
++    value = starter()
++    registered = config.targets()
++    if registered:
++        origin = next(iter(registered))
++        value['target']['origin'] = origin
++        value['target']['pinned_ips'] = registered[origin]
++    return value
+diff --git a/backend/app/engine_worker.py b/backend/app/engine_worker.py
+new file mode 100644
+index 0000000..5695ec2
+--- /dev/null
++++ b/backend/app/engine_worker.py
+@@ -0,0 +1,66 @@
++"""Persistence and cancellation adapter around the shared engine."""
++import asyncio
++from datetime import timedelta
++from sqlalchemy import select
++from dynaguard.config import ProjectConfig
++from dynaguard.engine import verify
++from dynaguard.discovery import discover
++from .db import Session
++from .models import EngineRun, now
++from .engine_api import validate_deployment_scope
++
++
++def claim():
++    with Session() as session, session.begin():
++        for row in session.scalars(select(EngineRun).where(EngineRun.status == 'running', EngineRun.lease_until < now()).with_for_update(skip_locked=True)):
++            row.status, row.stage = 'incomplete', 'Worker lease expired; no passing result inferred'
++        row = session.scalar(select(EngineRun).where(EngineRun.status == 'queued').order_by(EngineRun.created_at).with_for_update(skip_locked=True).limit(1))
++        if row is None:
++            return None
++        row.status, row.stage = 'running', 'Starting shared engine'
++        row.lease_until = now() + timedelta(seconds=40)
++        return row.id, row.mode, row.config
++
++
++async def execute(run_id, mode, contract):
++    async def progress(stage):
++        with Session() as session, session.begin():
++            row = session.get(EngineRun, run_id)
++            if row.cancel_requested or row.status != 'running':
++                raise asyncio.CancelledError()
++            row.stage = stage
++
++    task = None
++    report = None
++    try:
++        config = ProjectConfig.model_validate(contract)
++        validate_deployment_scope(config)
++        task = asyncio.create_task((verify if mode == 'verify' else discover)(config, progress))
++        async with asyncio.timeout(config.limits.seconds + 5):
++            while not task.done():
++                await asyncio.sleep(0.1)
++                with Session() as session, session.begin():
++                    row = session.get(EngineRun, run_id)
++                    if row.cancel_requested or row.status != 'running':
++                        task.cancel()
++                    else:
++                        row.lease_until = now() + timedelta(seconds=40)
++            report = await task
++            status = report['status']
++    except asyncio.CancelledError:
++        status = 'cancelled'
++    except Exception:
++        status = 'incomplete'
++    finally:
++        if task and not task.done():
++            task.cancel()
++        if task:
++            await asyncio.gather(task, return_exceptions=True)
++    with Session() as session, session.begin():
++        row = session.scalar(select(EngineRun).where(EngineRun.id == run_id).with_for_update())
++        if row.status != 'running':
++            return
++        row.status = 'cancelled' if row.cancel_requested else status
++        row.stage = 'Execution ' + row.status
++        row.report = None if row.cancel_requested else report
++        row.lease_until = None
+diff --git a/backend/app/models.py b/backend/app/models.py
+index e812cbe..ba18e82 100644
+--- a/backend/app/models.py
++++ b/backend/app/models.py
+@@ -91,3 +91,16 @@ class Evidence(Identity, Base):
+     run_id: Mapped[str] = mapped_column(ForeignKey('scan_runs.id'), unique=True)
+     content: Mapped[dict] = mapped_column(JSON)
+     sha256: Mapped[str] = mapped_column(String(64))
++
++
++class EngineRun(Identity, Base):
++    """Versioned shared-engine reports contain many executions and findings per run."""
++    __tablename__ = 'engine_runs'
++    project_id: Mapped[str] = mapped_column(ForeignKey('projects.id'), index=True)
++    mode: Mapped[str] = mapped_column(String(20))
++    status: Mapped[str] = mapped_column(String(30), default='queued', index=True)
++    stage: Mapped[str] = mapped_column(String(160), default='Waiting for worker')
++    config: Mapped[dict] = mapped_column(JSON)
++    report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
++    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
++    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+diff --git a/backend/app/worker.py b/backend/app/worker.py
+index 30bc4b8..5b6a85e 100644
+--- a/backend/app/worker.py
++++ b/backend/app/worker.py
+@@ -8,6 +8,7 @@ from . import config
+ from .db import Session
+ from .models import ScanRun, TestExecution, Finding, Evidence, now
+ from .verification import verify
++from . import engine_worker
+ 
+ 
+ def claim():
+@@ -94,6 +95,9 @@ async def main():
+     while True:
+         try:
+             reap()
++            engine_job = engine_worker.claim()
++            if engine_job:
++                await engine_worker.execute(*engine_job)
+             job = claim()
+             if job:
+                 await execute(*job)
+diff --git a/backend/dynaguard/__init__.py b/backend/dynaguard/__init__.py
+new file mode 100644
+index 0000000..ec2bcb0
+--- /dev/null
++++ b/backend/dynaguard/__init__.py
+@@ -0,0 +1,2 @@
++"""Shared local and dashboard security validation engine."""
++__version__ = '0.2.0'
+diff --git a/backend/dynaguard/__main__.py b/backend/dynaguard/__main__.py
+new file mode 100644
+index 0000000..13be635
+--- /dev/null
++++ b/backend/dynaguard/__main__.py
+@@ -0,0 +1,2 @@
++from .cli import main
++raise SystemExit(main())
+diff --git a/backend/dynaguard/cli.py b/backend/dynaguard/cli.py
+new file mode 100644
+index 0000000..9837841
+--- /dev/null
++++ b/backend/dynaguard/cli.py
+@@ -0,0 +1,103 @@
++"""CLI adapter; no dashboard account or database required."""
++import argparse
++import asyncio
++import html
++import json
++import os
++from pathlib import Path
++from .config import ProjectConfig
++from .engine import verify, contract_hash, seal_report
++from .source import scan_source
++
++
++def write_report(result, destination):
++    path = Path(destination)
++    path.parent.mkdir(parents=True, exist_ok=True)
++    # Reports describe weaknesses even when values are masked.
++    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
++    with os.fdopen(fd, 'w', encoding='utf-8') as output:
++        json.dump(result, output, indent=2)
++        output.write('\n')
++
++
++def parser():
++    root = argparse.ArgumentParser(prog='dynaguard', description='Local source review and configured authorization verification')
++    commands = root.add_subparsers(dest='command', required=True)
++    init = commands.add_parser('init', help='Write a data-only starter configuration')
++    init.add_argument('--output', default='dynaguard.json')
++    source = commands.add_parser('scan', help='Scan local source using built-in heuristics')
++    source.add_argument('kind', choices=['source'])
++    source.add_argument('--path', default='.')
++    source.add_argument('--output', default='dynaguard-source-report.json')
++    for name in ('verify', 'discover'):
++        sub = commands.add_parser(name)
++        sub.add_argument('--config', default='dynaguard.json')
++        sub.add_argument('--output', default=f'dynaguard-{name}-report.json')
++    retest = commands.add_parser('retest', help='Repeat one test from a previous verification report')
++    retest.add_argument('--config', default='dynaguard.json')
++    retest.add_argument('--report', required=True)
++    retest.add_argument('--test-id', required=True)
++    retest.add_argument('--output', default='dynaguard-retest-report.json')
++    report = commands.add_parser('report', help='Render an existing JSON report as escaped HTML')
++    report.add_argument('--input', required=True)
++    report.add_argument('--output', default='dynaguard-report.html')
++    return root
++
++
++def main(argv=None):
++    args = parser().parse_args(argv)
++    try:
++        if args.command == 'init':
++            from .starter import starter
++            with open(args.output, 'x', encoding='utf-8') as f:
++                json.dump(starter(), f, indent=2)
++                f.write('\n')
++            print('Configuration created. Review target scope and synthetic assertions before running.')
++            return 0
++        if args.command == 'report':
++            result = json.loads(Path(args.input).read_text())
++            text = '<!doctype html><meta charset="utf-8"><title>DynaGuard report</title><h1>DynaGuard report</h1><p>Results apply only to the documented scope.</p><pre>' + html.escape(json.dumps(result, indent=2)) + '</pre>'
++            fd = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
++            with os.fdopen(fd, 'w') as f:
++                f.write(text)
++            return 0
++        if args.command == 'scan':
++            result = scan_source(args.path)
++        else:
++            config = ProjectConfig.model_validate_json(Path(args.config).read_text())
++            if args.command == 'retest':
++                previous = json.loads(Path(args.report).read_text())
++                if previous.get('mode') != 'verify' or previous.get('project') != config.project or previous.get('target') != config.target.origin:
++                    raise ValueError('Retest requires the same project and target as the original verification report')
++                if args.test_id not in {e['test_id'] for e in previous.get('executions', [])}:
++                    raise ValueError('Test absent from original report')
++                config.tests = [t for t in config.tests if t.id == args.test_id]
++                if not config.tests:
++                    raise ValueError('Test absent from current configuration')
++                original = next(e for e in previous['executions'] if e['test_id'] == args.test_id)
++                digest = contract_hash(config, config.tests[0])
++                if digest != original.get('contract_sha256'):
++                    raise ValueError('Test contract changed; run a new scan instead of claiming a retest')
++            if args.command == 'discover':
++                from .discovery import discover
++                result = asyncio.run(discover(config))
++            else:
++                result = asyncio.run(verify(config))
++            if args.command == 'retest':
++                result['retest_of'] = previous['run_id']
++                seal_report(result)
++        write_report(result, args.output)
++        print(f"{result['mode']}: {result['status']}; findings={len(result['findings'])}; report={args.output}")
++        print(json.dumps(result['coverage']))
++        return 2 if result['status'] != 'completed' else (1 if result['findings'] else 0)
++    except KeyboardInterrupt:
++        print('Cancelled. No successful scan result is implied.')
++        return 130
++    except Exception:
++        # Validation exceptions can contain submitted passwords; never echo configuration.
++        print('Unable to complete command. Check configuration, file paths, and required credential variables. No passing result produced.')
++        return 2
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+diff --git a/backend/dynaguard/config.py b/backend/dynaguard/config.py
+new file mode 100644
+index 0000000..6210aa9
+--- /dev/null
++++ b/backend/dynaguard/config.py
+@@ -0,0 +1,118 @@
++"""Strict, data-only project contracts. No commands or inline credentials."""
++import ipaddress
++from urllib.parse import urlsplit
++from typing import Literal
++from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
++
++
++class Strict(BaseModel):
++    model_config = ConfigDict(extra='forbid')
++
++
++def safe_path(value):
++    p = urlsplit(value)
++    if not value.startswith('/') or value.startswith('//') or p.scheme or p.netloc or p.fragment:
++        raise ValueError('Use an origin-relative path without a fragment')
++    if any(c in value for c in ('\\', '\r', '\n', '\x00')) or '%' in p.path or '..' in p.path.split('/'):
++        raise ValueError('Encoded or ambiguous paths are not supported')
++    return value
++
++
++class Check(Strict):
++    path: str
++    expected: dict[str, str | int | bool] = Field(min_length=1, max_length=20)
++    _path = field_validator('path')(safe_path)
++
++
++class Identity(Strict):
++    kind: Literal['anonymous', 'bearer', 'json_login'] = 'anonymous'
++    token_env: str | None = None
++    login_path: str | None = None
++    username: str | None = None
++    username_field: str = 'username'
++    password_field: str = 'password'
++    password_env: str | None = None
++    token_field: str = 'access_token'
++    session: Literal['bearer', 'cookie'] = 'bearer'
++    auth_check: Check | None = None
++
++    @model_validator(mode='after')
++    def valid_identity(self):
++        if self.kind != 'anonymous' and not self.auth_check:
++            raise ValueError('Authenticated identities require an auth_check')
++        if self.kind == 'bearer' and not self.token_env:
++            raise ValueError('Bearer identities require token_env')
++        if self.kind == 'json_login':
++            if not all((self.login_path, self.username, self.password_env)):
++                raise ValueError('JSON login requires path, username and password_env')
++            safe_path(self.login_path)
++        return self
++
++
++class PermissionTest(Strict):
++    id: str = Field(pattern=r'^[a-zA-Z0-9_.-]{1,80}$')
++    title: str = Field(min_length=1, max_length=160)
++    authorized_identity: str
++    probe_identity: str
++    resource: Check
++    severity: Literal['medium', 'high', 'critical'] = 'high'
++    recommendation: str = 'Enforce server-side authorization for this resource and retain this test as a regression check.'
++
++
++class Target(Strict):
++    origin: str
++    pinned_ips: list[str] = Field(min_length=1, max_length=16)
++    allowed_paths: list[str] = Field(min_length=1, max_length=100)
++    allow_private: bool = False
++
++    @model_validator(mode='after')
++    def valid_target(self):
++        p = urlsplit(self.origin)
++        if p.scheme not in ('http', 'https') or not p.hostname or p.username or p.password or p.path not in ('', '/') or p.query or p.fragment:
++            raise ValueError('Target must be an HTTP(S) origin')
++        self.origin = self.origin.rstrip('/')
++        for value in self.pinned_ips:
++            ip = ipaddress.ip_address(value)
++            if ip.is_link_local or ip.is_multicast or ip.is_unspecified or (not self.allow_private and not ip.is_global):
++                raise ValueError('Private addresses need allow_private; link-local/multicast/unspecified addresses are prohibited')
++        for value in self.allowed_paths:
++            safe_path(value)
++            if '?' in value:
++                raise ValueError('Allowed paths must omit query strings')
++        return self
++
++
++class Limits(Strict):
++    requests: int = Field(default=100, ge=1, le=1000)
++    seconds: int = Field(default=120, ge=1, le=600)
++    response_bytes: int = Field(default=1048576, ge=1024, le=4194304)
++    pages: int = Field(default=10, ge=1, le=50)
++
++
++class ProjectConfig(Strict):
++    version: Literal[1] = 1
++    project: str = Field(min_length=1, max_length=120)
++    build_id: str = Field(min_length=1, max_length=120)
++    target: Target
++    identities: dict[str, Identity] = Field(min_length=1, max_length=20)
++    tests: list[PermissionTest] = Field(default_factory=list, max_length=100)
++    limits: Limits = Field(default_factory=Limits)
++    discovery_paths: list[str] = Field(default_factory=list, max_length=50)
++    discovery_identity: str | None = None
++
++    @model_validator(mode='after')
++    def references(self):
++        if len({t.id for t in self.tests}) != len(self.tests):
++            raise ValueError('Test IDs must be unique')
++        for test in self.tests:
++            if test.authorized_identity not in self.identities or test.probe_identity not in self.identities:
++                raise ValueError('Test identity not defined')
++            if test.authorized_identity == test.probe_identity:
++                raise ValueError('Use distinct authorized and probe identities')
++            if self.identities[test.authorized_identity].kind == 'anonymous':
++                raise ValueError('The authorized baseline must use an authenticated identity')
++        for path in self.discovery_paths:
++            safe_path(path)
++        if self.discovery_identity and self.discovery_identity not in self.identities:
++            raise ValueError('Discovery identity not defined')
++        return self
+diff --git a/backend/dynaguard/discovery.py b/backend/dynaguard/discovery.py
+new file mode 100644
+index 0000000..a9c057d
+--- /dev/null
++++ b/backend/dynaguard/discovery.py
+@@ -0,0 +1,78 @@
++"""Optional browser navigation through the same scoped HTTP transport."""
++import os
++from urllib.parse import urljoin, urlsplit
++from .engine import Session, report_base, mask
++from .network import Budget, Incomplete
++from .source import inspect_text
++
++
++async def discover(config, progress=None):
++    result = report_base('discover', config.project)
++    result.update(build_id=config.build_id, target=config.target.origin, pages=[], requests=[])
++    result['limitations'] = ['Read-only browser discovery; no clicks, form submissions, WebSockets or service workers.', 'Blocked assets and write requests may prevent complete rendering.', 'Only explicitly configured pages are navigated; discovered links are listed, not followed.', 'Browser interception is not an OS sandbox. Run untrusted pages in a dedicated network-restricted runner.']
++    try:
++        from playwright.async_api import async_playwright
++    except ImportError:
++        result.update(status='incomplete', reason='Install dynaguard[browser] and Chromium to use discovery')
++        return result
++    budget, secrets = Budget(config.limits), []
++    name = config.discovery_identity or next(iter(config.identities))
++    session = Session(config.identities[name], config.target, budget, secrets)
++    blocked = 0
++    try:
++        await session.login()
++        async with async_playwright() as pw:
++            browser = await pw.chromium.launch(executable_path=os.environ.get('DYNAGUARD_CHROMIUM_EXECUTABLE') or None)
++            try:
++                context = await browser.new_context(service_workers='block', accept_downloads=False)
++                await context.route_web_socket('**/*', lambda ws: ws.close())
++
++                async def route_request(route):
++                    nonlocal blocked
++                    request = route.request
++                    # Record path only, never request headers, body or query values.
++                    entry = {'method': request.method, 'path': urlsplit(request.url).path, 'type': request.resource_type}
++                    try:
++                        if request.method not in ('GET', 'HEAD'):
++                            raise Incomplete('State-changing request blocked during discovery')
++                        session.http.validate(request.url)
++                        response = await session.http.request(request.method, request.url)
++                        headers = {k: v for k, v in response.headers.items() if k.lower() not in ('content-encoding', 'content-length', 'transfer-encoding', 'set-cookie')}
++                        await route.fulfill(status=response.status_code, headers=headers, body=response.content)
++                        entry['status'] = response.status_code
++                        if any(t in response.headers.get('content-type', '') for t in ('text/', 'javascript', 'json')):
++                            findings = inspect_text(response.text, urlsplit(request.url).path)
++                            known = {f['id'] for f in result['findings']}
++                            result['findings'].extend(f for f in findings if f['id'] not in known)
++                            if len(result['findings']) >= 1000:
++                                result['findings'] = result['findings'][:1000]
++                                raise Incomplete('Finding limit reached')
++                    except Incomplete as error:
++                        blocked += 1
++                        entry['blocked'] = str(error)
++                        await route.abort()
++                    result['requests'].append(entry)
++
++                await context.route('**/*', route_request)
++                page = await context.new_page()
++                for path in config.discovery_paths[:config.limits.pages]:
++                    if progress:
++                        await progress('Rendering configured page')
++                    session.http.validate(urljoin(config.target.origin + '/', path))
++                    await page.goto(config.target.origin + path, wait_until='networkidle', timeout=min(15000, budget.remaining() * 1000))
++                    links = await page.locator('a[href]').evaluate_all('(nodes) => nodes.map(n => n.href)')
++                    # Strip query/fragment values; do not persist page content or titles containing personal data.
++                    result['pages'].append({'path': path.split('?')[0], 'links': sorted({urlsplit(link).path for link in links if urlsplit(link).netloc == urlsplit(config.target.origin).netloc})[:200]})
++                await session.check()
++            finally:
++                await browser.close()
++    except Incomplete as error:
++        result.update(status='incomplete', reason=str(error))
++    except Exception:
++        result.update(status='incomplete', reason='Browser unavailable, navigation failed, or execution interrupted; raw exception omitted')
++    finally:
++        await session.http.close()
++    if blocked or not config.discovery_paths or len(config.discovery_paths) > config.limits.pages:
++        result['status'] = 'incomplete'
++    result['coverage'] = {'planned_pages': len(config.discovery_paths), 'rendered_pages': len(result['pages']), 'requests': budget.count, 'blocked_requests': blocked}
++    return mask(result, secrets)
+diff --git a/backend/dynaguard/engine.py b/backend/dynaguard/engine.py
+new file mode 100644
+index 0000000..825c9dc
+--- /dev/null
++++ b/backend/dynaguard/engine.py
+@@ -0,0 +1,147 @@
++"""Executable authorization assertions, never inference from status code alone."""
++import hashlib
++import json
++import os
++from datetime import datetime, timezone
++from uuid import uuid4
++from .network import Budget, ScopedHTTP, Incomplete
++
++
++def field(value, dotted):
++    for key in dotted.split('.'):
++        if not isinstance(value, dict) or key not in value:
++            return None
++        value = value[key]
++    return value
++
++
++def payload(response):
++    try:
++        return response.json()
++    except ValueError:
++        return None
++
++
++def matches(value, expected):
++    return all(type(field(value, k)) is type(v) and field(value, k) == v for k, v in expected.items())
++
++
++def mask(value, secrets):
++    if isinstance(value, str):
++        for secret in sorted((s for s in secrets if s), key=len, reverse=True):
++            value = value.replace(secret, '[REDACTED]')
++        return value
++    if isinstance(value, list):
++        return [mask(v, secrets) for v in value]
++    if isinstance(value, dict):
++        return {k: mask(v, secrets) for k, v in value.items()}
++    return value
++
++
++def report_base(mode, project):
++    return {'schema_version': 1, 'run_id': str(uuid4()), 'mode': mode, 'project': project,
++            'created_at': datetime.now(timezone.utc).isoformat(), 'status': 'completed',
++            'executions': [], 'findings': [], 'coverage': {}, 'limitations': []}
++
++
++class Session:
++    def __init__(self, identity, target, budget, secrets, transport=None):
++        self.identity = identity
++        self.http = ScopedHTTP(target, budget, transport)
++        self.secrets = secrets
++
++    async def login(self):
++        identity = self.identity
++        if identity.kind == 'anonymous':
++            return
++        if identity.kind == 'bearer':
++            token = os.environ.get(identity.token_env, '')
++            if not token:
++                raise Incomplete('Required credential environment variable is missing')
++            self.secrets.append(token)
++            self.http.headers['Authorization'] = 'Bearer ' + token
++        else:
++            password = os.environ.get(identity.password_env, '')
++            if not password:
++                raise Incomplete('Required credential environment variable is missing')
++            self.secrets.append(password)
++            response = await self.http.request('POST', identity.login_path, json={identity.username_field: identity.username, identity.password_field: password})
++            # Include cookie values in redaction even when login fails.
++            self.secrets.extend(cookie.value for cookie in self.http.cookies.jar)
++            if response.status_code != 200:
++                raise Incomplete('Configured JSON login failed')
++            if identity.session == 'bearer':
++                token = field(payload(response), identity.token_field)
++                if not isinstance(token, str) or not token or len(token) > 8192:
++                    raise Incomplete('Login response lacks configured token field')
++                self.secrets.append(token)
++                self.http.headers['Authorization'] = 'Bearer ' + token
++        await self.check()
++
++    async def check(self):
++        check = self.identity.auth_check
++        if self.identity.kind == 'anonymous':
++            return
++        response = await self.http.request('GET', check.path)
++        if response.status_code != 200 or not matches(payload(response), check.expected):
++            raise Incomplete('Identity health check failed; no permission conclusion possible')
++
++
++def contract_hash(config, test):
++    document = {'test': test.model_dump(), 'identities': {name: config.identities[name].model_dump() for name in (test.authorized_identity, test.probe_identity)}}
++    return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
++
++
++def seal_report(result):
++    result.pop('evidence_sha256', None)
++    result['evidence_sha256'] = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()
++    return result
++
++
++async def verify(config, progress=None, transport=None):
++    result = report_base('verify', config.project)
++    result['build_id'] = config.build_id
++    result['target'] = config.target.origin
++    result['limitations'] = ['Read authorization only; no injection, write-workflow, database or mobile exploitation.', 'Build identifiers are supplied labels; findings apply only to the tested environment.']
++    budget, secrets = Budget(config.limits), []
++    for test in config.tests:
++        if progress:
++            await progress('Testing ' + test.id)
++        execution = {'test_id': test.id, 'title': test.title, 'outcome': 'incomplete', 'evidence': [], 'actual': '', 'contract_sha256': contract_hash(config, test)}
++        sessions = {}
++        try:
++            for name in (test.authorized_identity, test.probe_identity):
++                sessions[name] = Session(config.identities[name], config.target, budget, secrets, transport)
++                await sessions[name].login()
++            owner, probe = sessions[test.authorized_identity], sessions[test.probe_identity]
++            baseline = await owner.http.request('GET', test.resource.path)
++            baseline_ok = baseline.status_code == 200 and matches(payload(baseline), test.resource.expected)
++            execution['evidence'].append({'step': 'authorized_baseline', 'identity': test.authorized_identity, 'status': baseline.status_code, 'assertions_matched': baseline_ok})
++            if not baseline_ok:
++                raise Incomplete('Authorized baseline did not match the configured synthetic resource')
++            response = await probe.http.request('GET', test.resource.path)
++            disclosed = matches(payload(response), test.resource.expected)
++            execution['evidence'].append({'step': 'unauthorized_probe', 'identity': test.probe_identity, 'path': test.resource.path.split('?')[0], 'status': response.status_code, 'assertions_matched': disclosed, 'matched_fields': list(test.resource.expected) if disclosed else []})
++            if disclosed:
++                execution.update(outcome='failed', actual='The probe identity received the designated protected resource.')
++                fingerprint = hashlib.sha256(f'{config.project}:{test.id}:{config.target.origin}'.encode()).hexdigest()
++                result['findings'].append({'id': fingerprint, 'test_id': test.id, 'title': test.title, 'severity': test.severity, 'verification': 'confirmed_bypass', 'recommendation': test.recommendation, 'root_cause': 'Authorization failure demonstrated; source-level cause has not been established.'})
++            else:
++                denials = (401, 403, 404) if probe.identity.kind == 'anonymous' else (403, 404)
++                if response.status_code not in denials:
++                    raise Incomplete('Unexpected response; neither a bypass nor a valid denial was established')
++                await probe.check()
++                await owner.check()
++                execution.update(outcome='passed', actual='Access denied; configured authenticated identities remain valid.')
++                execution['evidence'].append({'step': 'identity_rechecks', 'passed': True})
++        except Incomplete as error:
++            execution['actual'] = str(error)
++        finally:
++            for session in sessions.values():
++                await session.http.close()
++        result['executions'].append(execution)
++    counts = {state: sum(e['outcome'] == state for e in result['executions']) for state in ('passed', 'failed', 'incomplete')}
++    result['coverage'] = {'planned': len(config.tests), **counts, 'requests': budget.count}
++    if counts['incomplete'] or not config.tests:
++        result['status'] = 'incomplete'
++    return seal_report(mask(result, secrets))
+diff --git a/backend/dynaguard/network.py b/backend/dynaguard/network.py
+new file mode 100644
+index 0000000..795deef
+--- /dev/null
++++ b/backend/dynaguard/network.py
+@@ -0,0 +1,97 @@
++"""Bounded HTTP(S) transport shared by verification and browser discovery."""
++import asyncio
++import ipaddress
++import socket
++import time
++from urllib.parse import urljoin, urlsplit
++import httpx
++from .config import safe_path
++
++
++class Incomplete(Exception):
++    pass
++
++
++class Budget:
++    def __init__(self, limits):
++        self.limits = limits
++        self.deadline = time.monotonic() + limits.seconds
++        self.count = 0
++
++    def remaining(self):
++        remaining = self.deadline - time.monotonic()
++        if remaining <= 0:
++            raise Incomplete('Run deadline reached')
++        return remaining
++
++    def claim(self):
++        self.remaining()
++        if self.count >= self.limits.requests:
++            raise Incomplete('Run request limit reached')
++        self.count += 1
++
++
++class ScopedHTTP:
++    def __init__(self, target, budget, transport=None):
++        self.target, self.budget = target, budget
++        self.client = httpx.AsyncClient(follow_redirects=False, trust_env=False, timeout=5, transport=transport)
++        self.headers = {}
++        self.cookies = httpx.Cookies()
++
++    def validate(self, url):
++        p, root = urlsplit(url), urlsplit(self.target.origin)
++        port = lambda v: v.port or (443 if v.scheme == 'https' else 80)
++        if (p.scheme, p.hostname, port(p)) != (root.scheme, root.hostname, port(root)) or p.username or p.password or p.fragment:
++            raise Incomplete('Request blocked outside configured origin')
++        try:
++            safe_path(p.path or '/')
++        except ValueError:
++            raise Incomplete('Ambiguous request path blocked') from None
++        if not any(p.path == allowed or (allowed.endswith('/') and p.path.startswith(allowed)) for allowed in self.target.allowed_paths):
++            raise Incomplete('Request path is outside configured scope')
++        return p, port(p)
++
++    async def request(self, method, path, json=None):
++        url = urljoin(self.target.origin + '/', path)
++        if method not in ('GET', 'HEAD', 'POST'):
++            raise Incomplete('Unsupported HTTP method')
++        for _ in range(5):
++            p, port = self.validate(url)
++            try:
++                answers = await asyncio.wait_for(asyncio.to_thread(socket.getaddrinfo, p.hostname, port, 0, socket.SOCK_STREAM), timeout=min(5, self.budget.remaining()))
++                addresses = {str(ipaddress.ip_address(item[4][0])) for item in answers}
++                allowed = {str(ipaddress.ip_address(ip)) for ip in self.target.pinned_ips}
++                if not addresses or not addresses.issubset(allowed):
++                    raise Incomplete('DNS addresses differ from configured pins')
++                address = sorted(addresses)[0]
++                address = f'[{address}]' if ':' in address else address
++                wire = f'{p.scheme}://{address}:{port}{p.path or "/"}' + (f'?{p.query}' if p.query else '')
++                self.budget.claim()
++                outgoing = httpx.Request(method, url, headers=self.headers)
++                self.cookies.set_cookie_header(outgoing)
++                self.client.cookies.clear()
++                async with asyncio.timeout(min(5, self.budget.remaining())):
++                    async with self.client.stream(method, wire, json=json, headers={**{k: v for k, v in outgoing.headers.items() if k not in ('host', 'content-length')}, 'host': p.netloc}, extensions={'sni_hostname': p.hostname}) as response:
++                        data = bytearray()
++                        async for chunk in response.aiter_bytes():
++                            data.extend(chunk)
++                            if len(data) > self.budget.limits.response_bytes:
++                                raise Incomplete('Response body exceeded configured limit')
++                        result = httpx.Response(response.status_code, headers=response.headers, content=bytes(data), request=httpx.Request(method, url))
++                        self.cookies.extract_cookies(result)
++            except (httpx.HTTPError, OSError, TimeoutError):
++                raise Incomplete('Target unavailable, TLS verification failed, or request timed out') from None
++            if result.is_redirect:
++                if method not in ('GET', 'HEAD'):
++                    raise Incomplete('Login redirects are not supported by JSON login')
++                location = result.headers.get('location')
++                if not location:
++                    raise Incomplete('Redirect lacks destination')
++                url = urljoin(url, location)
++                self.validate(url)
++                continue
++            return result
++        raise Incomplete('Redirect limit reached')
++
++    async def close(self):
++        await self.client.aclose()
+diff --git a/backend/dynaguard/source.py b/backend/dynaguard/source.py
+new file mode 100644
+index 0000000..26042bb
+--- /dev/null
++++ b/backend/dynaguard/source.py
+@@ -0,0 +1,72 @@
++"""Small transparent heuristic pack. Does not execute project code or install packages."""
++import hashlib
++import os
++from pathlib import Path
++import re
++from .engine import report_base
++
++EXCLUDED = {'.git', '.venv', 'venv', 'node_modules', '.next', 'build', 'dist', '__pycache__', '.dart_tool', '.idea'}
++TEXT_SUFFIXES = {'.py', '.js', '.jsx', '.ts', '.tsx', '.dart', '.java', '.kt', '.swift', '.json', '.yaml', '.yml', '.toml', '.ini', '.conf', '.sql', '.html', '.xml', '.properties', '.sh', '.env'}
++RULES = [
++    ('secret.private-key', 'Private key material', 'high', re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'), 'Remove private key material from source, assess exposure, and rotate affected credentials.'),
++    ('secret.assignment', 'Possible hardcoded credential', 'high', re.compile(r'''(?i)\b(?:password|passwd|api[_-]?key|client[_-]?secret|access[_-]?token)\b["']?\s*[:=]\s*["']([^"'\n]{8,})["']'''), 'Check whether this literal is a real private credential. If so, rotate it and use a secret reference.'),
++    ('tls.disabled', 'TLS verification may be disabled', 'medium', re.compile(r'\bverify\s*=\s*False\b|\brejectUnauthorized\s*:\s*false\b'), 'Enable certificate and hostname verification; validate context before changing test-only code.'),
++    ('frontend.html', 'Potential unsafe HTML rendering', 'medium', re.compile(r'\bdangerouslySetInnerHTML\b|\.innerHTML\s*='), 'Trace the rendered input and ensure untrusted HTML is sanitized before rendering.'),
++    ('database.public-rule', 'Potential public database access rule', 'high', re.compile(r'allow\s+(?:read|write|read,\s*write)\s*:\s*if\s+true\b'), 'Review the database rules and require the intended identity and ownership checks.'),
++    ('database.superuser', 'Database superuser declaration requires review', 'medium', re.compile(r'(?i)\b(?:CREATE|ALTER)\s+(?:ROLE|USER)\b[^;\n]*\bSUPERUSER\b'), 'Application roles should have only required privileges; distinguish provisioning scripts from runtime roles.'),
++    ('process.shell', 'Shell execution requires review', 'medium', re.compile(r'\bshell\s*=\s*True\b'), 'Review input flow and prefer argument arrays without a shell.'),
++]
++
++
++def scan_source(root, max_files=10000):
++    root = Path(root).resolve()
++    if not root.is_dir():
++        raise ValueError('Source path must be an existing directory')
++    result = report_base('source', root.name)
++    scanned = skipped = errors = 0
++    for directory, dirs, files in os.walk(root, followlinks=False):
++        skipped += sum(d in EXCLUDED or (Path(directory) / d).is_symlink() for d in dirs)
++        dirs[:] = sorted(d for d in dirs if d not in EXCLUDED and not (Path(directory) / d).is_symlink())
++        for name in sorted(files):
++            path = Path(directory) / name
++            if path.is_symlink() or (path.suffix not in TEXT_SUFFIXES and name != 'Dockerfile' and not name.startswith('.env')):
++                skipped += 1
++                continue
++            if scanned >= max_files:
++                result['status'] = 'incomplete'
++                errors += 1
++                break
++            try:
++                if path.stat().st_size > 1048576:
++                    skipped += 1
++                    continue
++                content = path.read_text(encoding='utf-8')
++            except (OSError, UnicodeError):
++                errors += 1
++                continue
++            scanned += 1
++            relative = path.relative_to(root).as_posix()
++            result['findings'].extend(inspect_text(content, relative))
++            if len(result['findings']) >= 1000:
++                result['findings'] = result['findings'][:1000]
++                result['status'] = 'incomplete'
++                errors += 1
++                break
++        if scanned >= max_files or len(result['findings']) >= 1000:
++            break
++    if errors or not scanned:
++        result['status'] = 'incomplete'
++    result['coverage'] = {'files_scanned': scanned, 'entries_skipped': skipped, 'read_errors_or_limits': errors, 'rules': len(RULES)}
++    result['limitations'] = ['Heuristics only; false positives and false negatives are expected.', 'No Git history, dependency advisory database, dataflow, database policy or runtime verification.', 'Symlinks, generated/vendor directories, non-text files and files over 1 MiB are excluded.']
++    return result
++
++
++def inspect_text(content, location):
++    findings = []
++    for rule_id, title, severity, pattern, recommendation in RULES:
++        for match in pattern.finditer(content):
++            line = content.count('\n', 0, match.start()) + 1
++            findings.append({'id': hashlib.sha256(f'{rule_id}:{location}:{line}'.encode()).hexdigest(), 'rule_id': rule_id, 'title': title, 'severity': severity, 'verification': 'suspected', 'path': location, 'line': line, 'recommendation': recommendation, 'evidence': 'Pattern matched; source text and secret values intentionally omitted.'})
++            if len(findings) >= 1000:
++                return findings
++    return findings
+diff --git a/backend/dynaguard/starter.py b/backend/dynaguard/starter.py
+new file mode 100644
+index 0000000..2664ab9
+--- /dev/null
++++ b/backend/dynaguard/starter.py
+@@ -0,0 +1,14 @@
++def starter():
++    return {
++        'version': 1, 'project': 'Local pilot', 'build_id': 'fixture-v1',
++        'target': {'origin': 'http://127.0.0.1:8101', 'pinned_ips': ['127.0.0.1'], 'allow_private': True, 'allowed_paths': ['/login', '/records/record-a', '/records/record-b']},
++        'identities': {
++            'alice': {'kind': 'json_login', 'login_path': '/login', 'username': 'alice', 'password_env': 'FIXTURE_PASSWORD', 'auth_check': {'path': '/records/record-a', 'expected': {'id': 'record-a', 'owner_id': 'alice'}}},
++            'bob': {'kind': 'json_login', 'login_path': '/login', 'username': 'bob', 'password_env': 'FIXTURE_PASSWORD', 'auth_check': {'path': '/records/record-b', 'expected': {'id': 'record-b', 'owner_id': 'bob'}}},
++            'anonymous': {'kind': 'anonymous'}
++        },
++        'tests': [
++            {'id': 'records.cross-owner', 'title': 'Another user can read the designated record', 'authorized_identity': 'bob', 'probe_identity': 'alice', 'resource': {'path': '/records/record-b', 'expected': {'id': 'record-b', 'owner_id': 'bob', 'marker': 'synthetic-bob-942'}}},
++            {'id': 'records.anonymous', 'title': 'Anonymous access to designated record', 'authorized_identity': 'bob', 'probe_identity': 'anonymous', 'resource': {'path': '/records/record-b', 'expected': {'id': 'record-b', 'owner_id': 'bob', 'marker': 'synthetic-bob-942'}}}
++        ]
++    }
+diff --git a/backend/migrations/versions/0002_shared_engine.py b/backend/migrations/versions/0002_shared_engine.py
+new file mode 100644
+index 0000000..07f0d8c
+--- /dev/null
++++ b/backend/migrations/versions/0002_shared_engine.py
+@@ -0,0 +1,26 @@
++"""Add shared engine runs without changing historical fixture evidence."""
++from alembic import op
++import sqlalchemy as sa
++
++revision = '0002'
++down_revision = '0001'
++
++
++def upgrade():
++    op.create_table('engine_runs',
++        sa.Column('id', sa.String(36), primary_key=True),
++        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
++        sa.Column('project_id', sa.String(36), sa.ForeignKey('projects.id'), nullable=False),
++        sa.Column('mode', sa.String(20), nullable=False),
++        sa.Column('status', sa.String(30), nullable=False),
++        sa.Column('stage', sa.String(160), nullable=False),
++        sa.Column('config', sa.JSON(), nullable=False),
++        sa.Column('report', sa.JSON(), nullable=True),
++        sa.Column('cancel_requested', sa.Boolean(), nullable=False),
++        sa.Column('lease_until', sa.DateTime(timezone=True)))
++    op.create_index('ix_engine_runs_project_id', 'engine_runs', ['project_id'])
++    op.create_index('ix_engine_runs_status', 'engine_runs', ['status'])
++
++
++def downgrade():
++    op.drop_table('engine_runs')
+diff --git a/backend/pyproject.toml b/backend/pyproject.toml
+new file mode 100644
+index 0000000..6f3a056
+--- /dev/null
++++ b/backend/pyproject.toml
+@@ -0,0 +1,19 @@
++[build-system]
++requires = ["setuptools>=68"]
++build-backend = "setuptools.build_meta"
++
++[project]
++name = "dynaguard"
++version = "0.2.0"
++description = "Local source review and evidence-backed application authorization testing"
++requires-python = ">=3.12"
++dependencies = ["httpx>=0.28,<0.29", "pydantic>=2.12,<3"]
++
++[project.optional-dependencies]
++browser = ["playwright>=1.48,<2"]
++
++[project.scripts]
++dynaguard = "dynaguard.cli:main"
++
++[tool.setuptools.packages.find]
++include = ["dynaguard*"]
+diff --git a/backend/tests/test_engine.py b/backend/tests/test_engine.py
+new file mode 100644
+index 0000000..0fc06c3
+--- /dev/null
++++ b/backend/tests/test_engine.py
+@@ -0,0 +1,206 @@
++import asyncio
++import hashlib
++import json
++import os
++from pathlib import Path
++import tempfile
++import threading
++import unittest
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from unittest.mock import patch
++import httpx
++from dynaguard.config import ProjectConfig, Target, Limits
++from dynaguard.engine import verify
++from dynaguard.network import ScopedHTTP, Budget, Incomplete
++from dynaguard.source import scan_source
++from dynaguard.cli import main
++
++SECRET = 'synthetic-test-password-only'
++
++
++def contract(origin='http://127.0.0.1:8910'):
++    return ProjectConfig.model_validate({
++        'project': 'Different application', 'build_id': 'v1',
++        'target': {'origin': origin, 'pinned_ips': ['127.0.0.1'], 'allow_private': True, 'allowed_paths': ['/session', '/api/me', '/api/tickets/7', '/app', '/asset.js']},
++        'identities': {
++            'owner': {'kind': 'json_login', 'login_path': '/session', 'username': 'manager', 'username_field': 'email', 'password_field': 'passcode', 'password_env': 'DYNAGUARD_TEST_PASSWORD', 'token_field': 'session.token', 'auth_check': {'path': '/api/me', 'expected': {'name': 'manager'}}},
++            'member': {'kind': 'json_login', 'login_path': '/session', 'username': 'member', 'username_field': 'email', 'password_field': 'passcode', 'password_env': 'DYNAGUARD_TEST_PASSWORD', 'token_field': 'session.token', 'auth_check': {'path': '/api/me', 'expected': {'name': 'member'}}},
++            'anonymous': {'kind': 'anonymous'}},
++        'tests': [{'id': 'tickets.owner', 'title': 'Ticket owner boundary', 'authorized_identity': 'owner', 'probe_identity': 'member', 'resource': {'path': '/api/tickets/7', 'expected': {'ticket.id': 'synthetic-7'}}}, {'id': 'tickets.anonymous', 'title': 'Anonymous ticket boundary', 'authorized_identity': 'owner', 'probe_identity': 'anonymous', 'resource': {'path': '/api/tickets/7', 'expected': {'ticket.id': 'synthetic-7'}}}],
++        'discovery_paths': ['/app'], 'discovery_identity': 'member'})
++
++
++def handler(vulnerable=True, ambiguous=False):
++    def serve(request):
++        if request.url.path == '/session':
++            data = json.loads(request.content)
++            if data.get('passcode') != SECRET:
++                return httpx.Response(401)
++            return httpx.Response(200, json={'session': {'token': data['email'] + '-secret'}})
++        user = request.headers.get('authorization', '').removeprefix('Bearer ').removesuffix('-secret')
++        if request.url.path == '/api/me':
++            return httpx.Response(200, json={'name': user})
++        if request.url.path == '/api/tickets/7':
++            if user == 'manager' or (vulnerable and user == 'member'):
++                return httpx.Response(200, json={'ticket': {'id': 'synthetic-7'}, 'password': SECRET})
++            if ambiguous:
++                return httpx.Response(200, text='<html>Login</html>')
++            return httpx.Response(403)
++        return httpx.Response(404)
++    return serve
++
++
++class SharedEngineTests(unittest.TestCase):
++    def setUp(self):
++        self.env = patch.dict(os.environ, {'DYNAGUARD_TEST_PASSWORD': SECRET})
++        self.env.start()
++
++    def tearDown(self):
++        self.env.stop()
++
++    def run_config(self, config=None, serve=None):
++        return asyncio.run(verify(config or contract(), transport=httpx.MockTransport(serve or handler())))
++
++    def test_multiple_tests_and_non_fixture_contract(self):
++        result = self.run_config()
++        self.assertEqual([e['outcome'] for e in result['executions']], ['failed', 'passed'])
++        self.assertEqual(len(result['findings']), 1)
++        self.assertNotIn(SECRET, json.dumps(result))
++        self.assertNotIn('manager-secret', json.dumps(result))
++
++    def test_fixed_and_ambiguous(self):
++        self.assertEqual(self.run_config(serve=handler(False))['coverage']['passed'], 2)
++        result = self.run_config(serve=handler(False, True))
++        self.assertEqual(result['status'], 'incomplete')
++        self.assertFalse(result['findings'])
++
++    def test_failed_login_and_budget_are_incomplete(self):
++        self.assertEqual(self.run_config(serve=lambda r: httpx.Response(401))['status'], 'incomplete')
++        config = contract(); config.limits.requests = 1
++        self.assertEqual(self.run_config(config)['status'], 'incomplete')
++
++    def test_missing_identity_health_check_rejected(self):
++        value = contract().model_dump(); value['identities']['owner']['auth_check'] = None
++        with self.assertRaises(ValueError): ProjectConfig.model_validate(value)
++
++    def test_inline_password_rejected(self):
++        value = contract().model_dump(); value['identities']['owner']['password'] = SECRET
++        with self.assertRaises(ValueError): ProjectConfig.model_validate(value)
++
++    def test_cross_origin_redirect_never_followed(self):
++        calls = []
++        def redirect(request):
++            calls.append(str(request.url)); return httpx.Response(302, headers={'location': 'http://unrelated.invalid/api/me'})
++        result = self.run_config(serve=redirect)
++        self.assertEqual(result['status'], 'incomplete')
++        self.assertFalse(any('unrelated' in u for u in calls))
++
++    def test_dns_rebinding_blocked(self):
++        with patch('dynaguard.network.socket.getaddrinfo', return_value=[(2, 1, 6, '', ('169.254.169.254', 80))]):
++            result = self.run_config()
++        self.assertEqual(result['coverage']['requests'], 0)
++        self.assertEqual(result['status'], 'incomplete')
++
++    def test_https_preserves_hostname_verification_extension(self):
++        config = contract('https://app.example.test')
++        seen = []
++        async def exercise():
++            client = ScopedHTTP(config.target, Budget(config.limits), httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(200)))
++            try: await client.request('GET', '/api/me')
++            finally: await client.close()
++        with patch('dynaguard.network.socket.getaddrinfo', return_value=[(2, 1, 6, '', ('127.0.0.1', 443))]): asyncio.run(exercise())
++        self.assertEqual(seen[0].extensions['sni_hostname'], 'app.example.test')
++        self.assertEqual(seen[0].headers['host'], 'app.example.test')
++        self.assertEqual(seen[0].url.host, '127.0.0.1')
++
++    def test_cookie_login_uses_original_hostname(self):
++        config = contract('https://app.example.test')
++        for identity in config.identities.values():
++            if identity.kind == 'json_login': identity.session = 'cookie'
++        def cookie_server(request):
++            if request.url.path == '/session':
++                user = json.loads(request.content)['email']
++                return httpx.Response(200, json={}, headers={'set-cookie': f'session={user}-secret; Domain=app.example.test; Path=/; Secure; HttpOnly'})
++            user = request.headers.get('cookie', '').removeprefix('session=').removesuffix('-secret')
++            if request.url.path == '/api/me': return httpx.Response(200, json={'name': user})
++            if user in ('manager', 'member'): return httpx.Response(200, json={'ticket': {'id': 'synthetic-7'}})
++            return httpx.Response(403)
++        with patch('dynaguard.network.socket.getaddrinfo', return_value=[(2, 1, 6, '', ('127.0.0.1', 443))]):
++            result = self.run_config(config, cookie_server)
++        self.assertEqual(result['coverage']['failed'], 1)
++        self.assertEqual(result['coverage']['passed'], 1)
++        self.assertNotIn('manager-secret', json.dumps(result))
++
++    def test_private_scope_requires_opt_in(self):
++        with self.assertRaises(ValueError): Target(origin='http://127.0.0.1', pinned_ips=['127.0.0.1'], allowed_paths=['/'])
++
++    def test_source_masks_literals_and_skips_symlinks(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            (root / 'app.py').write_text('password = "' + SECRET + '"\nverify=False')
++            (root / 'linked.py').symlink_to(root / 'app.py')
++            report = scan_source(root)
++            self.assertEqual(len(report['findings']), 2)
++            self.assertEqual(report['coverage']['files_scanned'], 1)
++            self.assertNotIn(SECRET, json.dumps(report))
++
++    def test_empty_source_is_not_pass(self):
++        with tempfile.TemporaryDirectory() as directory:
++            self.assertEqual(scan_source(directory)['status'], 'incomplete')
++
++    def test_html_report_escapes_untrusted_content(self):
++        with tempfile.TemporaryDirectory() as directory:
++            source, dest = Path(directory)/'r.json', Path(directory)/'r.html'
++            source.write_text(json.dumps({'title': '<script>alert(1)</script>'}))
++            self.assertEqual(main(['report', '--input', str(source), '--output', str(dest)]), 0)
++            self.assertNotIn('<script>', dest.read_text())
++
++
++class LiveApplicationTests(unittest.TestCase):
++    @classmethod
++    def setUpClass(cls):
++        cls.vulnerable = True
++        class App(BaseHTTPRequestHandler):
++            def log_message(self, *args): pass
++            def do_POST(self): self.respond()
++            def do_GET(self): self.respond()
++            def respond(self):
++                if self.path == '/app':
++                    body = b'<html><body><div id="result"></div><script src="/asset.js"></script></body></html>'
++                    self.send_response(200); self.send_header('Content-Type', 'text/html'); self.end_headers(); self.wfile.write(body); return
++                if self.path == '/asset.js':
++                    body = b'fetch("/api/me").then(r=>r.json()).then(v=>document.querySelector("#result").textContent=v.name)'
++                    self.send_response(200); self.send_header('Content-Type', 'application/javascript'); self.end_headers(); self.wfile.write(body); return
++                request = httpx.Request(self.command, 'http://127.0.0.1' + self.path, headers=dict(self.headers), content=self.rfile.read(int(self.headers.get('Content-Length', '0'))))
++                response = handler(cls.vulnerable)(request)
++                self.send_response(response.status_code)
++                self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(response.content)
++        cls.server = ThreadingHTTPServer(('127.0.0.1', 0), App)
++        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True); cls.thread.start()
++        cls.origin = f'http://127.0.0.1:{cls.server.server_port}'
++
++    @classmethod
++    def tearDownClass(cls):
++        cls.server.shutdown(); cls.server.server_close(); cls.thread.join()
++
++    def test_cli_real_http_and_retest(self):
++        with tempfile.TemporaryDirectory() as d, patch.dict(os.environ, {'DYNAGUARD_TEST_PASSWORD': SECRET}):
++            config = Path(d)/'config.json'; report = Path(d)/'report.json'; retest = Path(d)/'retest.json'
++            config.write_text(contract(self.origin).model_dump_json())
++            type(self).vulnerable = True
++            self.assertEqual(main(['verify', '--config', str(config), '--output', str(report)]), 1)
++            type(self).vulnerable = False
++            self.assertEqual(main(['retest', '--config', str(config), '--report', str(report), '--test-id', 'tickets.owner', '--output', str(retest)]), 0)
++            self.assertEqual(json.loads(retest.read_text())['coverage']['passed'], 1)
++            changed = contract(self.origin); changed.tests[0].title = 'Different test'
++            config.write_text(changed.model_dump_json())
++            self.assertEqual(main(['retest', '--config', str(config), '--report', str(report), '--test-id', 'tickets.owner', '--output', str(retest)]), 2)
++
++    @unittest.skipUnless(os.environ.get('DYNAGUARD_BROWSER_TEST') == '1', 'Set DYNAGUARD_BROWSER_TEST=1 after installing Chromium')
++    def test_browser_renders_js_and_captures_authenticated_api(self):
++        from dynaguard.discovery import discover
++        with patch.dict(os.environ, {'DYNAGUARD_TEST_PASSWORD': SECRET}):
++            report = asyncio.run(discover(contract(self.origin)))
++        self.assertEqual(report['status'], 'completed', report)
++        self.assertTrue(any(r['path'] == '/api/me' and r.get('status') == 200 for r in report['requests']))
++        self.assertEqual(report['coverage']['rendered_pages'], 1)
+diff --git a/backend/tests/test_engine_api.py b/backend/tests/test_engine_api.py
+new file mode 100644
+index 0000000..20f25bd
+--- /dev/null
++++ b/backend/tests/test_engine_api.py
+@@ -0,0 +1,71 @@
++import asyncio
++import json
++import unittest
++from unittest.mock import patch
++import httpx
++import test_acceptance
++from test_engine import contract, handler, SECRET
++from app import engine_api, engine_worker
++from dynaguard.engine import verify
++
++
++class EngineAdapterTests(unittest.TestCase):
++    def setUp(self):
++        test_acceptance.PlatformTests.setUp(self)
++        self.extra = [patch.object(engine_api, 'Session', self.session), patch.object(engine_worker, 'Session', self.session), patch.dict('os.environ', {'DYNAGUARD_TEST_PASSWORD': SECRET, 'TARGETS_JSON': json.dumps({'http://127.0.0.1:8910': ['127.0.0.1']})})]
++        for p in self.extra: p.start()
++        self.project_id = self.client.post('/projects', json={'name': 'Adapter test'}).json()['id']
++
++    def tearDown(self):
++        for p in reversed(self.extra): p.stop()
++        test_acceptance.PlatformTests.tearDown(self)
++
++    def test_shared_engine_multiple_results(self):
++        async def with_transport(config, progress):
++            return await verify(config, progress, httpx.MockTransport(handler()))
++        response = self.client.post(f'/projects/{self.project_id}/engine-runs', json={'mode': 'verify', 'config': contract().model_dump()})
++        self.assertEqual(response.status_code, 201, response.text)
++        with patch.object(engine_worker, 'verify', with_transport): asyncio.run(engine_worker.execute(*engine_worker.claim()))
++        runs = self.client.get(f'/projects/{self.project_id}/engine-runs').json()
++        self.assertEqual(runs[0]['status'], 'completed')
++        self.assertEqual(len(runs[0]['report']['executions']), 2)
++        self.assertEqual(len(runs[0]['report']['findings']), 1)
++        self.assertNotIn(SECRET, json.dumps(runs))
++
++    def test_scope_and_secret_names_rejected(self):
++        value = contract().model_dump(); value['target']['pinned_ips'] = ['127.0.0.2']
++        self.assertEqual(self.client.post(f'/projects/{self.project_id}/engine-runs', json={'mode': 'verify', 'config': value}).status_code, 422)
++        value = contract().model_dump(); value['identities']['owner']['password_env'] = 'SESSION_SECRET'
++        self.assertEqual(self.client.post(f'/projects/{self.project_id}/engine-runs', json={'mode': 'verify', 'config': value}).status_code, 422)
++
++    def test_source_upload_masking_and_traversal(self):
++        route = f'/projects/{self.project_id}/source-review'
++        result = self.client.post(route, json={'files': [{'path': 'app.py', 'content': 'password = "'+SECRET+'"'}]})
++        self.assertEqual(result.status_code, 201, result.text)
++        self.assertEqual(len(result.json()['report']['findings']), 1)
++        self.assertNotIn(SECRET, result.text)
++        self.assertEqual(self.client.post(route, json={'files': [{'path': '../escape.py', 'content': 'bad'}]}).status_code, 422)
++
++    def test_queued_cancel(self):
++        row = self.client.post(f'/projects/{self.project_id}/engine-runs', json={'mode': 'verify', 'config': contract().model_dump()}).json()
++        self.assertEqual(self.client.post('/engine-runs/'+row['id']+'/cancel').json()['status'], 'cancelled')
++        self.assertIsNone(engine_worker.claim())
++
++    def test_running_cancel_stops_shared_engine_task(self):
++        closed = []
++        async def slow(config, progress):
++            try:
++                await asyncio.sleep(20)
++            finally:
++                closed.append(True)
++        row = self.client.post(f'/projects/{self.project_id}/engine-runs', json={'mode': 'verify', 'config': contract().model_dump()}).json()
++        job = engine_worker.claim()
++        async def exercise():
++            task = asyncio.create_task(engine_worker.execute(*job))
++            await asyncio.sleep(0.2)
++            self.client.post('/engine-runs/'+row['id']+'/cancel')
++            await asyncio.wait_for(task, timeout=2)
++        with patch.object(engine_worker, 'verify', slow): asyncio.run(exercise())
++        runs = self.client.get(f'/projects/{self.project_id}/engine-runs').json()
++        self.assertEqual(runs[0]['status'], 'cancelled')
++        self.assertTrue(closed)
+diff --git a/compose.browser.yaml b/compose.browser.yaml
+new file mode 100644
+index 0000000..6f44c09
+--- /dev/null
++++ b/compose.browser.yaml
+@@ -0,0 +1,12 @@
++# Optional browser worker. Default networks remain internal and fixture-only.
++services:
++  worker:
++    image: dynaguard-worker-browser:local
++    build:
++      context: ./backend
++      dockerfile: Dockerfile.browser
++    mem_limit: 2g
++    cpus: 2
++    pids_limit: 256
++    shm_size: 256m
++    tmpfs: [/tmp:size=256m]
+diff --git a/dashboard/app/engine-panel.tsx b/dashboard/app/engine-panel.tsx
+new file mode 100644
+index 0000000..ed673ee
+--- /dev/null
++++ b/dashboard/app/engine-panel.tsx
+@@ -0,0 +1,75 @@
++'use client';
++import {useEffect, useState} from 'react';
++
++type Report = {status: string; coverage: Record<string, number>; findings: Array<{id: string; title: string; severity: string; verification: string}>; executions: Array<{test_id: string; outcome: string; actual: string}>};
++type Run = {id: string; mode: string; status: string; stage: string; report: Report | null};
++
++async function request<T>(path: string, body?: unknown): Promise<T> {
++  const response = await fetch('/api' + path, {method: body === undefined ? 'GET' : 'POST', headers: {'Content-Type': 'application/json', 'X-DynaGuard-Client': 'dashboard'}, ...(body === undefined ? {} : {body: JSON.stringify(body)})});
++  const data = await response.json();
++  if (!response.ok) throw new Error(data.detail || 'Request failed');
++  return data;
++}
++
++export default function EnginePanel({projectId}: {projectId: string}) {
++  const [config, setConfig] = useState('');
++  const [runs, setRuns] = useState<Run[]>([]);
++  const [error, setError] = useState('');
++  const [busy, setBusy] = useState(false);
++  useEffect(() => {request('/engine-template').then(v => setConfig(JSON.stringify(v, null, 2))).catch(() => setError('Could not load template'));}, []);
++  useEffect(() => {
++    let active = true;
++    let timer: ReturnType<typeof setTimeout>;
++    const refresh = async () => {
++      try { const data = await request<Run[]>(`/projects/${projectId}/engine-runs`); if (active) setRuns(data); }
++      catch { if (active) setError('Could not refresh shared engine runs'); }
++      if (active) timer = setTimeout(refresh, 1500);
++    };
++    void refresh();
++    return () => {active = false; clearTimeout(timer);};
++  }, [projectId]);
++
++  async function start(mode: 'verify' | 'discover') {
++    setBusy(true); setError('');
++    try {await request(`/projects/${projectId}/engine-runs`, {mode, config: JSON.parse(config)});}
++    catch (e) {setError(e instanceof SyntaxError ? 'Configuration must be valid JSON' : (e as Error).message);}
++    finally {setBusy(false);}
++  }
++
++  async function upload(files: FileList | null) {
++    if (!files?.length) return;
++    setBusy(true); setError('');
++    try {
++      const list = Array.from(files);
++      if (list.length > 100 || list.reduce((total, f) => total + f.size, 0) > 1500000) throw new Error('Select at most 100 text files totaling 1.5 MB. Use the CLI for larger repositories.');
++      const content = await Promise.all(list.map(async f => ({path: f.webkitRelativePath || f.name, content: await f.text()})));
++      await request(`/projects/${projectId}/source-review`, {files: content});
++    } catch (e) {setError((e as Error).message);} finally {setBusy(false);}
++  }
++
++  function download(run: Run) {
++    const url = URL.createObjectURL(new Blob([JSON.stringify(run.report, null, 2)], {type: 'application/json'}));
++    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `dynaguard-${run.id}.json`; anchor.click(); URL.revokeObjectURL(url);
++  }
++
++  return <section>
++    <h2>Shared engine · configurable application tests</h2>
++    <p>Configure your registered target, identity checks and synthetic resource assertions. This uses the same engine as the terminal CLI.</p>
++    <p className="muted">Targets and IP pins must be registered by the deployment owner. Reference worker credentials by environment-variable name; never paste passwords or tokens here.</p>
++    {error && <p role="alert" className="error">{error}</p>}
++    <label>Project test configuration<textarea aria-label="Project test configuration" rows={18} value={config} onChange={e => setConfig(e.target.value)} style={{width: '100%', fontFamily: 'monospace'}} /></label>
++    <div className="row"><button className="primary" disabled={busy} onClick={() => start('verify')}>Verify permissions</button><button disabled={busy} onClick={() => start('discover')}>Discover live pages</button></div>
++    <p className="muted">Discovery requires the optional browser worker dependencies and configured discovery_paths. Missing capabilities produce incomplete results.</p>
++    <label>Review selected source files<input type="file" multiple disabled={busy} onChange={e => {void upload(e.target.files); e.target.value = '';}} /></label>
++    <p className="muted">Selected file contents are sent to this DynaGuard server for heuristic review, then removed from temporary storage. Reports omit source snippets. CLI scans stay local.</p>
++    <h3>Shared engine runs</h3>
++    {runs.length === 0 && <p>No shared engine runs yet.</p>}
++    {runs.map(run => <details key={run.id}><summary>{run.mode} · {run.status} · {run.id.slice(0, 8)}</summary><p>{run.stage}</p>
++      {['queued', 'running'].includes(run.status) && <button onClick={() => request(`/engine-runs/${run.id}/cancel`, {}).catch(e => setError(e.message))}>Cancel</button>}
++      {run.report && <><p>{run.report.findings.length} findings. Completed describes execution, not a security guarantee.</p><pre>{JSON.stringify(run.report.coverage, null, 2)}</pre>
++        {run.report.executions.map(e => <p key={e.test_id}><strong>{e.test_id}: {e.outcome}</strong> — {e.actual}</p>)}
++        {run.report.findings.map(f => <p key={f.id}>{f.severity} · {f.verification} · {f.title}</p>)}
++        <button onClick={() => download(run)}>Download JSON report</button><details><summary>Evidence and limitations</summary><pre>{JSON.stringify(run.report, null, 2)}</pre></details></>}
++    </details>)}
++  </section>;
++}
+diff --git a/dashboard/app/page.tsx b/dashboard/app/page.tsx
+index 76cbe1a..a35d442 100644
+--- a/dashboard/app/page.tsx
++++ b/dashboard/app/page.tsx
+@@ -1,5 +1,7 @@
+ 'use client';
+ 
++import EnginePanel from './engine-panel';
++
+ import { FormEvent, useCallback, useEffect, useState } from 'react';
+ 
+ type Project = {id: string; name: string};
+@@ -82,12 +84,12 @@ export default function Page() {
+ 
+   return <main>
+     <header><div><strong className="brand">DynaGuard</strong><span className="muted">Dynamatrix / internal validation</span></div>{authenticated && <button onClick={() => action(async () => {await api('/auth/logout', {}); setAuthenticated(false); setDetail(null); setResult(null); setFinding(null);})}>Sign out</button>}</header>
+-    <div className="intro"><span className="eyebrow">LOCAL FIXTURE PILOT</span><h1>Evidence before conclusions.</h1><p>Verify one ownership boundary, inspect the proof, then test the fix.</p></div>
++    <div className="intro"><span className="eyebrow">SOURCE REVIEW AND APPLICATION VERIFICATION</span><h1>Evidence before conclusions.</h1><p>Configure application tests, inspect evidence, and verify repairs.</p></div>
+     {error && <div role="alert" className="error">{error}</div>}
+     {checking ? <p>Checking session…</p> : !authenticated ? <section className="login"><h2>Administrator sign in</h2><form onSubmit={login}><label>Username<input value="admin" autoComplete="username" readOnly /></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" /></label><button disabled={busy} className="primary">Sign in</button></form><p className="muted">Use the administrator password created during local setup.</p></section> : <div className="workspace">
+       <aside><h2>Projects</h2>{projects.length === 0 && <p className="muted">Create a project to begin.</p>}{projects.map(project => <button className={`project ${selected === project.id ? 'selected' : ''}`} key={project.id} onClick={() => chooseProject(project.id)}>{project.name}</button>)}<form onSubmit={e => {e.preventDefault(); action(async () => {const project = await api<Project>('/projects', {name: projectName}); setProjectName(''); chooseProject(project.id);});}}><label>New project<input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="DynaFlow local pilot" required maxLength={120} /></label><button disabled={busy || !projectName.trim()}>Create project</button></form></aside>
+       <div className="content">{!selected ? <section><h2>Start with a synthetic project</h2><p>Create a project, configure the vulnerable and fixed targets, then start the ownership test.</p><p className="muted">Coverage: one designated-record permission test. No real products have been scanned.</p></section> : !detail ? <p>Loading project…</p> : <>
+-        <section><h2>{detail.project.name}</h2><p className="muted">Synthetic Alice → own record → Bob’s record → evidence → retest</p><h3>Local target environments</h3>{detail.environments.map(environment => {const policy = detail.policies.find(p => p.environment_id === environment.id); return <div className="row" key={environment.id}><div><strong>{environment.name}</strong><small>{environment.target} · {environment.build_id}</small></div><button disabled={busy || !policy} onClick={() => scan(policy!.id)}>Start scan</button></div>;})}
++        <EnginePanel key={selected} projectId={selected} /><section><h2>{detail.project.name} · legacy fixture pilot</h2><p className="muted">Synthetic Alice → own record → Bob’s record → evidence → retest</p><h3>Local target environments</h3>{detail.environments.map(environment => {const policy = detail.policies.find(p => p.environment_id === environment.id); return <div className="row" key={environment.id}><div><strong>{environment.name}</strong><small>{environment.target} · {environment.build_id}</small></div><button disabled={busy || !policy} onClick={() => scan(policy!.id)}>Start scan</button></div>;})}
+           <details open={detail.environments.length === 0}><summary>Configure a local target</summary><form className="grid" onSubmit={e => {e.preventDefault(); action(async () => {await api(`/projects/${selected}/environments`, {name: environmentName, target, build_id: build}); setEnvironmentName(''); setBuild(''); await refresh();});}}><label>Environment name<input required value={environmentName} onChange={e => setEnvironmentName(e.target.value)} placeholder="Vulnerable fixture" maxLength={120}/></label><label>Allowed target<select value={target} onChange={e => setTarget(e.target.value)}>{targets.map(t => <option key={t}>{t}</option>)}</select></label><label>Build identifier<input required value={build} onChange={e => setBuild(e.target.value)} placeholder="fixture-vulnerable-v1" maxLength={120}/></label><button disabled={busy || !target}>Save target & policy</button></form><p className="muted">Fixed ownership test · fixture/alice credential reference · 8 requests maximum · 15 second deadline</p></details>
+         </section>
+         <section><h2>Scan runs</h2>{detail.runs.length === 0 && <p className="muted">No tests have run yet.</p>}{detail.runs.map(run => <button className="row run" key={run.id} onClick={() => {setResult(null); setRunId(run.id);}}><span>{run.snapshot.build_id}{run.retest_of && ' · retest'}<small>{new Date(run.created_at).toLocaleString()}</small></span><span className={`badge ${run.status}`}>{run.status}</span></button>)}</section>
+@@ -96,6 +98,6 @@ export default function Page() {
+         {finding && <section><h2>{finding.finding.title}</h2><dl><dt>Expected</dt><dd>{finding.original.execution.expected}</dd><dt>Demonstrated behavior</dt><dd>{finding.original.execution.actual}</dd><dt>Suggested repair</dt><dd>{finding.finding.recommendation}</dd></dl><details><summary>Original masked evidence</summary><pre>{JSON.stringify(finding.original.evidence?.content, null, 2)}</pre></details><h3>Retest against a configured build</h3><div className="row"><select aria-label="Retest environment" value={retestPolicy} onChange={e => setRetestPolicy(e.target.value)}><option value="">Choose environment</option>{detail.policies.map(p => <option key={p.id} value={p.id}>{detail.environments.find(e => e.id === p.environment_id)?.name}</option>)}</select><button disabled={busy || !retestPolicy} onClick={() => scan(retestPolicy, finding.finding.id)}>Run retest</button></div>{finding.retests.map(retest => <div key={retest.run.id} className="row"><span>{retest.run.snapshot.build_id}<small>{retest.execution.actual}</small></span><span className={`badge ${retest.execution.outcome}`}>{retest.execution.outcome}</span></div>)}{finding.retests.length === 0 && <p className="muted">No retest yet.</p>}</section>}
+       </>}</div>
+     </div>}
+-    <footer>Local synthetic fixtures only. A completed run describes this one test; it is not a product security certification.</footer>
++    <footer>Results apply only to configured checks and targets. Untested components are not certified secure.</footer>
+   </main>;
+ }
+diff --git a/docs/CONFIGURATION.md b/docs/CONFIGURATION.md
+new file mode 100644
+index 0000000..e6327b3
+--- /dev/null
++++ b/docs/CONFIGURATION.md
+@@ -0,0 +1,113 @@
++# Project configuration
++
++Version 1 is strict JSON. Unknown fields are rejected so typos do not silently disable checks. `dynaguard init` creates a starter and never overwrites an existing configuration.
++
++## Top-level fields
++
++| Field | Meaning |
++|---|---|
++| version | Must be 1 |
++| project | Stable project name |
++| build_id | Operator-supplied build label; not verified against an artifact |
++| target | One exact HTTP(S) origin, IP pins and allowed paths |
++| identities | Named authentication profiles |
++| tests | Up to 100 configured read-permission assertions |
++| limits | Global request, time, response-body and page limits |
++| discovery_paths | Explicit pages to render; discovered links are not automatically followed |
++| discovery_identity | Identity used for rendered-page requests |
++
++The engine supports a single origin per configuration. For separate frontend and API origins, create separate configurations for now. Cross-origin assets are blocked and reported; multi-origin support is future work.
++
++## Target
++
++```json
++{
++  "origin": "https://staging.example.com",
++  "pinned_ips": ["203.0.113.10"],
++  "allowed_paths": ["/auth/session", "/api/me", "/api/items/", "/app", "/assets/"],
++  "allow_private": true
++}
++```
++
++The address above is documentation-only and must be replaced. `allow_private` permits explicitly pinned non-global addresses; it does not permit link-local, multicast or unspecified addresses. Public targets should normally use `false`.
++
++Paths are exact unless they end in `/`, in which case descendants are permitted. Query strings are supported in requested resources but omitted from persisted request-path evidence. Encoded/ambiguous paths are intentionally unsupported in this version. Origins cannot contain credentials, query strings, fragments or a non-root path.
++
++Each request resolves DNS and requires all returned addresses to match the permitted pins. The connection uses a validated address. HTTPS retains the original hostname for Host, SNI and certificate verification. Redirects remain in the same allowed origin/path scope. Non-GET login redirects are unsupported and yield incomplete results.
++
++## Identities
++
++Anonymous:
++
++```json
++{"kind": "anonymous"}
++```
++
++Existing bearer credential:
++
++```json
++{
++  "kind": "bearer",
++  "token_env": "DYNAGUARD_TEST_MEMBER_TOKEN",
++  "auth_check": {"path": "/api/me", "expected": {"user.id": "test-member"}}
++}
++```
++
++JSON login with custom field names:
++
++```json
++{
++  "kind": "json_login",
++  "login_path": "/auth/session",
++  "username": "member@example.test",
++  "username_field": "email",
++  "password_field": "passcode",
++  "password_env": "DYNAGUARD_TEST_MEMBER_PASSWORD",
++  "session": "bearer",
++  "token_field": "session.token",
++  "auth_check": {"path": "/api/me", "expected": {"user.id": "test-member"}}
++}
++```
++
++For cookie login, use `"session": "cookie"`; token_field is unused. The login response must currently return HTTP 200. Cookie matching uses the original target hostname even when the actual connection is pinned to an IP. Separate identities have separate cookie jars. Cookie-based auth is tested by the mandatory identity health check.
++
++All authenticated identities require a health check. Dotted assertion keys address nested JSON objects; array selectors are unsupported. Comparisons are type-sensitive. Use stable synthetic identifiers, not real personal records or secrets, in assertions.
++
++Dashboard worker environment references must start with `DYNAGUARD_TEST_`, except the legacy `FIXTURE_PASSWORD`. This prevents selecting a service credential such as SESSION_SECRET through the UI. The CLI runs under your local configuration and environment; it has no server credential registry.
++
++## Read-permission tests
++
++```json
++{
++  "id": "projects.member-boundary",
++  "title": "Member can access another team's synthetic project",
++  "authorized_identity": "team-b-owner",
++  "probe_identity": "team-a-member",
++  "resource": {
++    "path": "/api/projects/synthetic-project-b",
++    "expected": {"project.id": "synthetic-project-b", "project.marker": "audit-only-942"}
++  },
++  "severity": "high",
++  "recommendation": "Check membership and ownership on the server before returning the project."
++}
++```
++
++Both identity names must exist and must differ. The authorized baseline cannot be anonymous. The resource assertions must be nonempty. Broad assertions such as `success: true` are weak evidence: choose values uniquely identifying the protected synthetic resource.
++
++Possible outcomes:
++
++- **failed / confirmed_bypass:** the unauthorized response matches the protected-resource assertions, even if its status is an error.
++- **passed:** the authorized baseline succeeds, the probe receives 403/404 (or 401 for anonymous), and authenticated identities still pass their health checks.
++- **incomplete:** login failure, stale session, missing credentials, unexpected response, exhausted budget, network error, denied scope or missing prerequisites.
++
++The test does not identify the precise code defect. It demonstrates an authorization boundary failure. A recommendation is configured guidance, not an automatically validated patch.
++
++## Limits
++
++Defaults: 100 requests, 120 seconds, 1 MiB per decoded response and 10 pages. Limits are shared across tests/identities in a run. Maxima: 1000 requests, 600 seconds, 4 MiB per response and 50 pages. Requests have an additional five-second ceiling. No state-changing retries are performed.
++
++## Reports and retention
++
++The engine records status, assertion outcomes, selected paths, test-contract hashes and coverage. It omits response bodies, authorization headers, passwords, tokens and raw error traces. Known credential values are scrubbed from final strings as defense in depth.
++
++CLI output files are created with private permissions where supported. Existing file permissions and Windows ACLs remain the operator's responsibility. Source reports contain paths and line numbers; treat them as sensitive. Retention/deletion policy and an external encrypted artifact store are not implemented yet.
+diff --git a/docs/LEGACY_FIXTURE.md b/docs/LEGACY_FIXTURE.md
+new file mode 100644
+index 0000000..2c58f41
+--- /dev/null
++++ b/docs/LEGACY_FIXTURE.md
+@@ -0,0 +1,110 @@
++> Historical fixture-only setup. For the shared engine, start with the root README.
++
++# DynaGuard foundation
++
++An internal, local security-validation pilot for Dynamatrix. This milestone implements one real permission test and its evidence/retest cycle against synthetic fixtures. DynaFlow integration comes later.
++
++## Start with Docker Compose
++
++Prerequisites: Docker Desktop running Linux containers, Docker Compose, Python 3.12+ for the secret-setup helper, and at least 5 GiB free for initial images/build caches (more if Docker needs to grow its virtual disk). Nothing is deployed publicly.
++
++From the project root:
++
++```powershell
++python scripts/setup.py
++if ($LASTEXITCODE -eq 0) { docker compose up --build -d }
++```
++
++The setup helper asks you to choose an administrator password of at least 16 characters. Input is hidden while you type; short or mismatched passwords prompt you to retry. It stores its scrypt hash, plus generated local service secrets, in the ignored `.env` file. It does not print the password. Existing `.env` files are preserved. Once setup has already succeeded, start directly with `docker compose up --build -d`.
++
++Open **http://127.0.0.1:3000**, sign in as **admin**, and use your chosen password. Startup applies the PostgreSQL migration before starting the API or worker. PostgreSQL data persists in a Docker volume.
++
++```powershell
++docker compose ps
++docker compose logs --tail=50 api worker
++docker compose down
++```
++
++`down` stops services and retains database records. Fixtures have no host ports. Only the dashboard is published, bound to loopback. If Docker reports a subnet conflict, change both the fixture subnet/static IPs and `TARGETS_JSON` in `compose.yaml` together.
++
++## Walk through the milestone
++
++1. Create a project named `DynaFlow local pilot`.
++2. Configure an environment named `Vulnerable fixture`, select `http://fixture-vulnerable:8000`, and enter build identifier `fixture-vulnerable-v1`.
++3. Configure a second environment named `Fixed fixture`, select `http://fixture-fixed:8000`, and enter `fixture-fixed-v1`.
++4. Start the vulnerable scan. Open its run: the execution should be **failed**, with a **confirmed_bypass** finding. `completed` is the orchestration state, not a passing security result.
++5. Open the finding and its masked evidence. The authorized Alice record baseline must succeed, then Bob's designated record and marker must be returned to confirm the bypass.
++6. In the finding, select `Fixed fixture` and click **Run retest**. The same test must **pass**: access to Bob's record is denied, and Alice can still access her own record afterward.
++7. The original finding becomes **verified fixed**, with the original evidence and retest history retained. Open the JSON report from the run.
++
++Scope: one synthetic ownership boundary. An empty finding list is not a claim that a product is secure. An unavailable target, failed login, lost authentication, unexpected response, exhausted limit, crashed worker, or deadline produces **incomplete**. Cancellation is a separate non-passing result.
++
++## Architecture and data
++
++- `dashboard/`: Next.js App Router + TypeScript. Same-origin API proxy; credentials are not placed in browser storage. Minimal project, environment, run, finding, evidence, and retest views.
++- `backend/app/api.py`: FastAPI control plane. Administrator session cookie, CSRF boundary, project/target/policy registration, run requests, reports and cancellation.
++- `backend/app/worker.py`: separate process/container, claiming PostgreSQL jobs with row locks and `SKIP LOCKED`. Executes only the fixed test catalog; no supplied scripts or shell commands. No Redis/Celery is needed for this single-test milestone.
++- `backend/app/scope.py`: exact origin/path checks, deployment-pinned IPv4 addresses, checks every redirect, connects to the verified IP, disables proxy environment inheritance, bounds requests, response size and duration.
++- `backend/app/verification.py`: authorized baseline, cross-owner probe, protected-record assertions and legitimate-access recheck.
++- `backend/fixture/main.py`: two synthetic users (`alice`, `bob`), two projects and two designated records. Vulnerable and corrected instances differ only in the ownership guard. No real accounts or services.
++- `backend/migrations/`: Alembic initial schema and reversible migration. Models include Project, Environment/allowed target, ScanPolicy, ScanRun, TestExecution, Finding, Evidence and CredentialReference. Each child carries project identity. Retests reference the original finding.
++
++Policies/environments are immutable through the current API. Each run freezes its target, build label, credential reference, test/version and limits. Evidence stores selected, redacted request/response proof fields with timestamps and a SHA-256 integrity hash. It intentionally excludes raw login responses, arbitrary response text and headers. The database stores `fixture/alice`, never the fixture password or access token.
++
++Administrator authentication uses a salted scrypt password hash, an eight-hour signed HttpOnly SameSite=Strict cookie, a login-attempt limit and a custom mutation header with same-origin protections. Cookies use HTTP for loopback development; any future HTTPS deployment must enable `COOKIE_SECURE=true` on the API. The administrator can access all projects in this single-organization pilot.
++
++The trusted worker runs one test at a time. Its cancellation monitor checks about every 100 ms and cancels the active HTTP task, closing the client before acknowledging completion. A test has a default 15-second overall budget, three-second per-request ceiling, eight-request limit and 16 KiB maximum decoded response. An abandoned worker lease is marked incomplete after 40 seconds by a live worker; if all workers are offline, reconciliation happens when one restarts. No automatic test retries.
++
++## Local development without Docker
++
++This fallback uses SQLite and one worker for local debugging. PostgreSQL/Compose is the intended deployment configuration; SQLite does not verify PostgreSQL concurrency or container isolation.
++
++```powershell
++python -m venv .venv
++.\.venv\Scripts\python -m pip install -r backend/requirements.txt
++npm.cmd --prefix dashboard ci
++python scripts/setup.py
++.\.venv\Scripts\python scripts/dev.py
++```
++
++On macOS/Linux, use `.venv/bin/python` and `npm`. The launcher runs migrations, fixtures on `127.0.0.1:8101` / `:8102`, API on `:8000`, worker, and dashboard on `:3000`. Select those loopback targets in the dashboard. Ctrl+C stops the launched processes. Do not run this and Compose on port 3000 simultaneously.
++
++## Verification commands
++
++```powershell
++# Acceptance/unit tests (temporary SQLite database; actual ASGI fixtures)
++Set-Location backend
++..\.venv\Scripts\python -m unittest discover -s tests -v
++Set-Location ..
++
++# Separate fixture/API/worker processes, real loopback HTTP, migrated temporary DB
++.\.venv\Scripts\python scripts/smoke.py
++
++# Next.js production compilation and TypeScript checks
++npm.cmd --prefix dashboard run build
++npm.cmd --prefix dashboard run typecheck
++
++# Actual isolated Compose project, PostgreSQL, worker, dashboard proxy
++# Uses port 3000; removes only its own dynaguard-acceptance-* test volume afterward.
++.\.venv\Scripts\python scripts/compose_smoke.py
++```
++
++`scripts/smoke.py --serve` keeps a disposable populated demo at **http://127.0.0.1:3001** for browser QA after a dashboard build. It uses the public synthetic test credential defined in that script, not your development administrator password. Stop it with Ctrl+C. It never modifies `.env` or the development database.
++
++With that disposable demo running, run `npx playwright test` from `dashboard/`. The test uses the installed Microsoft Edge browser, creates a project and environments through the UI, inspects evidence, verifies the fixed retest and signs out. Set `TEST_BROWSER_CHANNEL=chrome` to use an installed Chrome instead. The screenshot is saved under `artifacts/dynaguard-milestone.png`.
++
++The tests cover vulnerable/fixed results, evidence hashes, retest history, failed login, unavailable targets, failed baselines, ambiguous HTTP 200s, authentication expiry, scope/redirect/DNS blocking, limits, masking, administrator/CSRF checks, project-policy boundaries, cancellation and worker loss.
++
++The Compose verification builds images sequentially and stops if free space drops below 512 MiB. It additionally checks actual PostgreSQL job locking, unavailable targets, failed fixture login, queued cancellation, non-root/read-only worker and fixture containers, absence of their host ports, and internal control/fixture networks. With application images already built, `--skip-build` reuses them. Keep the default 5 GiB initial space requirement for fresh builds; `--minimum-free-gib` is intended for retries with cached images/layers. Execution results and any outstanding checks are recorded in `VERIFICATION.md`.
++
++## Remaining boundaries
++
++- This is a local pilot, not a hardened production deployment. No DynaFlow repository or real target has been scanned.
++- Only the fixed synthetic permission-test contract is supported. No AI, general scanners, mobile testing, source analysis or arbitrary URL entry.
++- The Compose networks isolate fixtures from external routing. The trusted worker still shares a control network and database with the API; a separate scope gateway, restricted database roles, per-run disposable containers and separate runner VM are future hardening work before integrating untrusted tools.
++- Local secrets use process environment variables and an ignored `.env`; a managed secret store, evidence encryption/retention/deletion, audit log, backups and multi-user RBAC remain future work.
++- Evidence is stored as redacted JSON in PostgreSQL for this small milestone, not object storage. The SHA-256 hash detects content changes when compared but is not a signature against a database administrator.
++- Build identifiers are administrator-supplied labels, not independently verified artifact digests. “Verified fixed” applies to the selected retested fixture build, not every environment.
++- Session logout clears the browser cookie; there is no server-side session revocation store. Login throttling is in-process. Container images are version-tagged; image-digest pinning and a reviewed dependency-update pipeline remain future work.
++
++Implementation references: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [SQLAlchemy locking/selects](https://docs.sqlalchemy.org/en/20/core/selectable.html). The supplied design plan remains the broader roadmap.
+diff --git a/docs/SYSTEM_LOGIC.md b/docs/SYSTEM_LOGIC.md
+new file mode 100644
+index 0000000..9764cea
+--- /dev/null
++++ b/docs/SYSTEM_LOGIC.md
+@@ -0,0 +1,100 @@
++# Shared engine system logic
++
++## Design rule
++
++The CLI and dashboard are adapters. They call the same functions in `backend/dynaguard`; neither implements its own security decision logic. The old fixture verifier remains separate only to preserve historical behavior while migrating users.
++
++```mermaid
++flowchart TD
++    CLI["CLI"] --> Config["Validated project contract"]
++    UI["Dashboard"] --> API["Authenticated API"]
++    API --> Queue["PostgreSQL engine runs"]
++    Queue --> Worker["Worker and cancellation monitor"]
++    Worker --> Config
++    Config --> Scope["Scoped HTTP transport"]
++    Scope --> Verify["Permission assertions"]
++    Scope --> Browser["Browser discovery"]
++    CLI --> Source["Source heuristic review"]
++    API --> Source
++    Verify --> Report["Evidence and coverage report"]
++    Browser --> Report
++    Source --> Report
++```
++
++## Modules and responsibilities
++
++| Module | Responsibility |
++|---|---|
++| config.py | Strict schema, identity/test references, limits and path validation |
++| network.py | Shared budget, DNS pin checks, TLS hostname verification, redirects and bounded responses |
++| engine.py | Auth sessions, protected-resource assertions, outcomes and sanitized evidence |
++| source.py | Seven visible heuristic rules; never executes project code |
++| discovery.py | Optional browser rendering with requests mediated through network.py |
++| cli.py | Local file/config adapter, exit codes, HTML export and unchanged-contract retesting |
++| app/engine_api.py | Administrator-only run submission, deployment scope checks and bounded uploads |
++| app/engine_worker.py | Queue claims, leases, cancellation, persistence and exception handling |
++| dashboard/app/engine-panel.tsx | Configuration editor, source upload, progress and report display |
++
++## Verification algorithm
++
++1. Validate configuration before any network request.
++2. Create one run-wide time/request budget.
++3. For each test, create independent owner/probe sessions.
++4. Resolve credentials from environment references at execution time.
++5. Authenticate and verify each authenticated identity against its configured health assertion.
++6. Request the resource as the authorized identity; require HTTP 200 and matching protected-record fields.
++7. Request the same resource as the probe identity.
++8. If the protected-record fields match, record a confirmed bypass, regardless of response status.
++9. Otherwise require an appropriate denial, then recheck authenticated identity health.
++10. Return passed only when the full expected behavior is observed. All ambiguous/failed prerequisites are incomplete.
++11. Close sessions, redact known secrets, compute report hash and return multiple independent outcomes.
++
++Credentials are not inferred from source findings or reused to explore unrelated services. Authorization expectations must come from the operator; the engine cannot infer the intended business policy reliably.
++
++## Browser discovery
++
++Authentication occurs through the same API session adapter. Playwright renders each explicitly configured page. All intercepted HTTP requests are fetched through ScopedHTTP; the browser never receives permission to follow arbitrary target URLs through `route.continue_`. Requests other than GET/HEAD are blocked after authentication. Service workers and WebSockets are disabled.
++
++The worker records requested paths, resource types, response statuses and blocked reasons, not raw headers/body/query values. It lists same-origin links but does not follow them. Delivered text/JavaScript/JSON is checked by the source heuristic rules. Each match remains suspected, not a proven vulnerability.
++
++This transport mediation does not replace VM/network isolation. A dedicated restricted browser worker remains required before treating hostile target content as trusted to execute.
++
++## Source review
++
++Walk text files without following symlinks; skip vendor/build folders and files larger than 1 MiB. Apply a small declared pack: private-key headers, credential assignments, disabled TLS verification, unsafe HTML rendering indicators, shell execution indicators, public database-rule patterns and database superuser declarations.
++
++Persist rule ID, path, line and remediation guidance. Never persist matching source lines or literal secrets. Cap results at 1000; limits/read failures produce incomplete status. An empty eligible source set is incomplete. No finding means no match among scanned rules, not proof of secure code.
++
++## Persistence and compatibility
++
++Migration 0002 adds `engine_runs` with project, mode, immutable submitted configuration, status, lease, cancellation flag and JSON report. A versioned report contains many executions/findings. JSON storage avoids rewriting old fixture tables; queryable normalized execution/finding tables can be introduced later if reporting volume demands it.
++
++Legacy `scan_runs`/`test_executions`/`findings`/`evidence` retain their existing schema and endpoints. They remain the one-test fixture workflow. New configurable work uses `/engine-runs`; do not mix its report semantics with old fixture results.
++
++API routes:
++
++- GET /engine-template
++- POST /projects/{id}/engine-runs
++- GET /projects/{id}/engine-runs
++- POST /engine-runs/{id}/cancel
++- POST /projects/{id}/source-review
++
++Reports are included in the project run list (latest 100 runs). Download is client-side JSON. Pagination and separate artifact endpoints are future work.
++
++## Worker state
++
++Queued → running → completed/incomplete/cancelled. Claims use PostgreSQL row locking with SKIP LOCKED; SQLite is only a single-worker local debugging configuration. Each job has a renewable 40-second lease. A running worker reconciles expired jobs as incomplete. No retry replays target actions automatically.
++
++Cancellation monitors a database flag every 100 ms while work runs, cancels the asyncio task and closes sessions/browser resources through finally blocks. The final database update refuses to overwrite a previously reconciled run. A cancellation request takes precedence over a just-finished report. Source uploads are synchronous and bounded; they do not expose background cancellation.
++
++There is one trusted worker loop in this pilot. New shared-engine and legacy fixture jobs are serviced in turn; both are bounded. Strong process-per-run isolation, worker database least privilege and a separate network gateway remain future hardening.
++
++## Retesting
++
++CLI retests require the original report's project/origin and the same test-contract hash, including both identity configurations. The new report links to the original run ID. The build label may change; the test expectation may not silently change. This prevents claiming a repair because the test was weakened. Changes to either identity configuration require a new scan; the retest also checks both identities' health assertions.
++
++New dashboard runs can be repeated against a changed build, but automatic linked lifecycle updates are not yet implemented there. The UI does not claim otherwise.
++
++## Extension contract
++
++Every future scanner adapter must declare supported inputs, dependencies, scope, impact, timeouts, evidence fields and incomplete conditions. Each verification capability requires a vulnerable fixture and a secure counterpart. Scanner alerts must remain suspected until a suitable verifier establishes impact. AI may explain evidence later, but must not override scope or assign confirmed status without verification.
+diff --git a/docs/VERIFICATION_SHARED_ENGINE.md b/docs/VERIFICATION_SHARED_ENGINE.md
+new file mode 100644
+index 0000000..ae88889
+--- /dev/null
++++ b/docs/VERIFICATION_SHARED_ENGINE.md
+@@ -0,0 +1,43 @@
++# Shared-engine verification — 14 October 2026
++
++This record applies to the shared-engine implementation branch. It does not assert that DynaFlow, PrayasshPOS, the school system or HamroBuzz were scanned.
++
++## Result
++
++41 tests executed: 40 passed and 1 optional browser integration test skipped. Next.js build/typecheck and SQLite migration checks passed.
++
++## Independently exercised
++
++- Legacy fixture acceptance tests remain passing.
++- New engine handles a different JSON login contract (`email`, `passcode`, nested `session.token`), different API routes and nested resource assertions.
++- Multiple permission tests produce separate outcomes and a confirmed finding only for the designated unauthorized resource disclosure.
++- Real loopback HTTP application: CLI detects the vulnerable case, then passes an unchanged-contract retest after the application guard changes.
++- Changed test contract is rejected as a retest.
++- Failed authentication, ambiguous HTML login responses, DNS-pin mismatch and exhausted request limits do not produce a passing result.
++- HTTPS request construction retains Host and SNI hostname when dialing a pinned IP (mock-transport assertion; not a live TLS handshake test).
++- Cookie-login transport retains the original hostname for Domain/Secure cookie matching (mock transport).
++- Source review masks literal secrets, skips symlinks and marks an empty eligible source set incomplete.
++- HTML report export escapes embedded markup.
++- Dashboard API queues the shared engine, persists multiple executions/findings, rejects unregistered pins/service-secret references and supports queued and running cancellation.
++- Source upload rejects parent-directory traversal and omits matched secrets from saved reports.
++- SQLite migration 0002 upgrade, downgrade to 0001, re-upgrade and Alembic metadata checks pass.
++- Next.js production build and standalone TypeScript check pass.
++
++## Not independently verified here
++
++- Browser rendering integration: the optional test is present but skipped because the Chromium download returned an invalid archive in this environment. Discovery returns incomplete when the browser cannot launch. Do not treat the browser feature as deployment-validated until the opt-in test passes.
++- New browser Docker image and full Compose/PostgreSQL runtime were not executed here.
++- Real public HTTPS endpoints, OAuth/MFA, production workloads and any customer's data were not accessed.
++- The legacy root VERIFICATION.md records earlier checks by the previous implementation; those broader deployment claims are not newly certified by this update.
++
++## Reproduce
++
++Install backend requirements and `pip install -e 'backend[browser]'`, then run from `backend/`:
++
++```bash
++python -m unittest discover -s tests -v
++```
++
++For the browser test, first install Chromium, set `DYNAGUARD_BROWSER_TEST=1`, and rerun the suite. You may use a compatible installed browser via `DYNAGUARD_CHROMIUM_EXECUTABLE`.
++
++From `dashboard/`, run `npm ci`, `npm run build`, and `npm run typecheck`.
+diff --git a/examples/fixture.json b/examples/fixture.json
+new file mode 100644
+index 0000000..9fbdfbd
+--- /dev/null
++++ b/examples/fixture.json
+@@ -0,0 +1,78 @@
++{
++  "version": 1,
++  "project": "Local pilot",
++  "build_id": "fixture-v1",
++  "target": {
++    "origin": "http://127.0.0.1:8101",
++    "pinned_ips": [
++      "127.0.0.1"
++    ],
++    "allow_private": true,
++    "allowed_paths": [
++      "/login",
++      "/records/record-a",
++      "/records/record-b"
++    ]
++  },
++  "identities": {
++    "alice": {
++      "kind": "json_login",
++      "login_path": "/login",
++      "username": "alice",
++      "password_env": "FIXTURE_PASSWORD",
++      "auth_check": {
++        "path": "/records/record-a",
++        "expected": {
++          "id": "record-a",
++          "owner_id": "alice"
++        }
++      }
++    },
++    "bob": {
++      "kind": "json_login",
++      "login_path": "/login",
++      "username": "bob",
++      "password_env": "FIXTURE_PASSWORD",
++      "auth_check": {
++        "path": "/records/record-b",
++        "expected": {
++          "id": "record-b",
++          "owner_id": "bob"
++        }
++      }
++    },
++    "anonymous": {
++      "kind": "anonymous"
++    }
++  },
++  "tests": [
++    {
++      "id": "records.cross-owner",
++      "title": "Another user can read the designated record",
++      "authorized_identity": "bob",
++      "probe_identity": "alice",
++      "resource": {
++        "path": "/records/record-b",
++        "expected": {
++          "id": "record-b",
++          "owner_id": "bob",
++          "marker": "synthetic-bob-942"
++        }
++      }
++    },
++    {
++      "id": "records.anonymous",
++      "title": "Anonymous access to designated record",
++      "authorized_identity": "bob",
++      "probe_identity": "anonymous",
++      "resource": {
++        "path": "/records/record-b",
++        "expected": {
++          "id": "record-b",
++          "owner_id": "bob",
++          "marker": "synthetic-bob-942"
++        }
++      }
++    }
++  ]
++}
+-- 
+2.51.1
+
