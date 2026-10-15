@@ -48,7 +48,8 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?Run setup first}
     networks: [control]
     depends_on:
-      migrate: {condition: service_completed_successfully}
+      - db
+      - migrate
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 5s
@@ -96,7 +97,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     depends_on:
-      api: {condition: service_healthy}
+      - api
 
 networks:
   edge:

@@ -33,21 +33,24 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "📦 Building images with fresh code..."
-            docker compose build api
-            docker compose build dashboard
-
-            echo "🛑 Freeing port 3000 and restarting containers..."
+            echo "🛑 Stopping old containers and freeing port 3000..."
             docker compose down || true
-            docker ps -q --filter "publish=3000" | xargs -r docker stop || true
-            fuser -k 3000/tcp || true
-            lsof -ti:3000 | xargs -r kill -9 || true
+            docker rm -f dynaguard-dashboard-1 dynaguard-api-1 || true
+
+            echo "📦 Building images with fresh code (no cache)..."
+            docker compose build --no-cache api dashboard
+
+            echo "🚀 Starting fresh containers..."
             docker compose up -d --force-recreate
 
-            echo "🔍 Container Status:"
-            docker compose ps
+            sleep 4
+            echo "🔍 All Containers Status:"
+            docker compose ps -a
 
-            echo "📋 Migration status:"
-            docker compose logs --tail=20 migrate
+            echo "📋 Dashboard container logs:"
+            docker compose logs --tail=20 dashboard || true
+
+            echo "📋 API container logs:"
+            docker compose logs --tail=20 api || true
 
             echo "✅ Deployment completed successfully!"
