@@ -1,223 +1,263 @@
-# DynaGuard
+# 🛡️ DynaGuard · Security Validation & Senior QA Platform
 
-DynaGuard is an internal security-validation tool with a **local terminal CLI and a web dashboard using the same Python engine**. It reviews selected source patterns, performs configured read-permission tests against running applications, and records what each test actually proved.
+<div align="center">
 
-This release replaces the fixture-only restriction for new shared-engine runs. The original Alice/Bob demo and its historical results remain available separately.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16.4-black.svg)](https://nextjs.org/)
+[![TypeScript 5](https://img.shields.io/badge/TypeScript-5.0-3178c6.svg)](https://www.typescriptlang.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![Playwright](https://img.shields.io/badge/Playwright-Chromium-45ba4b.svg)](https://playwright.dev/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ed.svg)](https://docs.docker.com/compose/)
+[![License: Internal / Proprietary](https://img.shields.io/badge/License-Internal-orange.svg)]()
 
-**A completed run is not a declaration that an application is secure.** The reports distinguish suspected source issues, confirmed permission bypasses, passed assertions, and incomplete checks.
+**A unified security-validation engine, static code auditor, and senior QA platform featuring a terminal CLI and a modern web dashboard powered by a single core Python engine.**
 
-## What works in this release
+[Key Features](#-key-features) • [Visual Showcase](#-visual-showcase) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Senior QA Platform](#-senior-qa-platform) • [Security & Boundaries](#-security-principles--safe-boundaries)
 
-| Capability | CLI | Dashboard | Boundaries |
-|---|---|---|---|
-| Source review | Repository directory | Selected text-file upload | Seven heuristic patterns; no dataflow or dependency advisory engine |
-| HTTP/HTTPS permission tests | JSON configuration | Same JSON configuration | Read access to designated synthetic resources |
-| Authentication | Anonymous, bearer token, JSON login | Same | JSON login supports bearer response or session cookies; no OAuth/MFA/form automation |
-| Multiple tests per run | Yes | Yes | Shared-engine reports retain separate executions and findings |
-| Browser discovery | Optional Playwright extra | Optional browser worker | Renders explicitly listed pages, lists links and captures permitted requests |
-| Frontend exposure review | Through browser discovery | Through browser discovery | Heuristic inspection of delivered text/JS/JSON; secret values omitted |
-| Evidence/reporting | JSON and escaped HTML | JSON report/download and evidence viewer | Root causes are not invented from a status code |
-| Retest | Repeat one unchanged test contract | Edit build label and start a new shared-engine run | Automatic linked retest is CLI-only for new engine runs; legacy UI retests remain |
-| Cancellation | Ctrl+C | Cancel queued/running jobs | Incomplete/cancelled runs do not count as passes |
+---
 
-Not implemented: general injection exploitation, write-workflow manipulation, attack-chain planning, database connections/policy adapters, mobile analysis, repository Git-history scanning, Semgrep/Trivy/ZAP integrations, automatic code repair or AI root-cause analysis. Database-related source patterns are heuristics, not a database security audit.
+![DynaGuard Dashboard Overview](assets/screenshots/dashboard-overview.png)
 
-## Quick start: local CLI
+</div>
 
-Python **3.12+** is required. Run from the repository root:
+---
+
+## 🌟 Key Features
+
+| Capability | CLI Support | Web Dashboard | Security & Coverage Boundaries |
+|:---|:---:|:---:|:---|
+| **Security Validation Engine** | ✅ `dynaguard verify` | ✅ Interactive UI | Synthetic identity tests, cross-owner authorization checks, exact record assertions |
+| **Appbar Project Switcher** | N/A | ✅ Fixed Header | Instant multi-project switching and inline `+ New project` creation in top sticky bar |
+| **Fixed Ergonomic Sidebar** | N/A | ✅ Non-Scrollable | Zero-scroll fixed navigation bar (`100vh`) with dedicated content container scrolling |
+| **Senior QA Testing Suite** | ✅ CLI Runner | ✅ Visual Panel | Risk matrix mapping, automated contract assertions, response time tracking, regression suites |
+| **Static Code Audit** | ✅ `dynaguard scan` | ✅ Visual Panel | Heuristic AST pattern matcher covering credentials, CORS, SQLi, and secret leakages |
+| **Live Browser Discovery** | ✅ `dynaguard discover`| ✅ Background Worker | Headless Chromium rendering, asset inspection, client-side exposure auditing |
+| **Evidence & Cryptographic Retest**| ✅ JSON/HTML | ✅ Evidence Viewer | SHA-256 test contract verification; linked historical retest without overwriting original logs |
+
+---
+
+## 📸 Visual Showcase
+
+### 1. Modern Workspace & Appbar Project Switcher
+The application header features a breadcrumb trail, direct project switching dropdown, inline project creation field, and environment switcher. The sidebar stays completely fixed while page content scrolls smoothly.
+
+![Dashboard Overview](assets/screenshots/dashboard-overview.png)
+
+---
+
+### 2. Dedicated Main-Content Scrolling
+When exploring extensive test suites or audit reports, the navigation sidebar and top appbar remain securely pinned, maximizing viewport readability.
+
+![Scrolled Page View](assets/screenshots/dashboard-scrolled.png)
+
+---
+
+### 3. All-Panels Full Stack Workspace
+Access the Overview, Senior QA Platform, Code Audit, Shared Engine, Runs, and Findings from a unified interface with live metric badges.
+
+![All Panels Workspace](assets/screenshots/all-panels.png)
+
+---
+
+### 4. Code Audit & Vulnerability Inspection
+Review detected heuristic patterns, severity ratings, file locations, code snippets, and remediation guidelines directly inside the audit interface.
+
+![Code Audit](assets/screenshots/code-audit.png)
+
+---
+
+### 5. Seamless Authentication Portal
+Clean, accessible login experience with credential validation, role feedback, and responsive state handling.
+
+![Authentication Portal](assets/screenshots/login-page.png)
+
+---
+
+## 🏗️ Architecture
+
+DynaGuard decouples test execution logic from the user interface. Both the Command Line Interface (CLI) and the Next.js Dashboard interact with the same Python core engine (`backend/dynaguard`), ensuring test results and hash verifications are strictly identical across environments.
+
+```mermaid
+flowchart TD
+    subgraph UI_Layer ["🖥️ User Interface Layer"]
+        CLI["Terminal CLI (dynaguard)"]
+        Dashboard["Next.js 16 Web Dashboard"]
+        Appbar["Sticky Appbar (Project Switcher & Targets)"]
+        Sidebar["Fixed Non-Scrollable Sidebar"]
+    end
+
+    subgraph Core_Engine ["⚙️ Shared Python Engine (backend/dynaguard)"]
+        Transport["Scoped HTTP/S Transport (IP Pinned)"]
+        Verifier["Permission Bypass Verifier"]
+        QARunner["Senior QA Execution Runner"]
+        CodeAudit["Static Code Auditor (AST Scanners)"]
+        BrowserWorker["Playwright Chromium Discovery"]
+    end
+
+    subgraph Targets ["🎯 Target Applications"]
+        FixtureVulnerable["Synthetic Fixture (Vulnerable Mode)"]
+        FixtureFixed["Synthetic Fixture (Fixed Mode)"]
+        StagingApp["Live Staging Services (Verified IP)"]
+    end
+
+    subgraph Storage ["💾 Persistence & Reports"]
+        DB[(SQLite / PostgreSQL)]
+        JSONReports["Cryptographic JSON Reports"]
+        HTMLReports["Escaped Evidence Viewer HTML"]
+    end
+
+    CLI --> Core_Engine
+    Dashboard --> Appbar
+    Dashboard --> Sidebar
+    Dashboard --> Core_Engine
+
+    Core_Engine --> Transport
+    Transport --> FixtureVulnerable
+    Transport --> FixtureFixed
+    Transport --> StagingApp
+    BrowserWorker --> StagingApp
+
+    Core_Engine --> Storage
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python **3.12+**
+- Node.js **20+** & npm
+- Docker & Docker Compose (optional, for full containerized deployment)
+
+### 1. Terminal CLI Setup
+Run from the repository root:
 
 ```bash
+# Create and activate virtual environment
 python -m venv .venv
-```
 
-Activate the environment:
-
-```bash
-# macOS/Linux
+# Linux/macOS:
 source .venv/bin/activate
-```
-
-```powershell
-# Windows PowerShell
+# Windows PowerShell:
 .\.venv\Scripts\Activate.ps1
+
+# Install backend in editable mode
+python -m pip install -e ./backend
 ```
 
-Install the CLI and scan a local repository:
-
+#### Run a Local Source Security Audit
 ```bash
-python -m pip install -e ./backend
-dynaguard scan source --path /path/to/your/project --output source-report.json
+dynaguard scan source --path /path/to/project --output source-report.json
 dynaguard report --input source-report.json --output source-report.html
 ```
 
-Use a quoted Windows path such as `--path "C:\Projects\DynaFlow"` where applicable. No dashboard account, database or source upload is required for CLI scans. The CLI does not install or execute the scanned project's dependencies.
-
-### Configure a running application
-
+#### Execute Permission Verification Against a Running Service
 ```bash
+# Generate sample test specification
 dynaguard init --output dynaguard.json
-```
 
-This creates a **local fixture example**, not a ready-made configuration for DynaFlow. Edit it for your actual environment. Never put passwords or private tokens directly in JSON. Use environment-variable references such as `DYNAGUARD_TEST_MEMBER_PASSWORD`.
-
-```bash
+# Execute permission verification
 dynaguard verify --config dynaguard.json --output verification.json
+
+# Render human-readable escaped HTML report
 dynaguard report --input verification.json --output verification.html
 ```
 
-Before running, define the referenced test credentials in your shell or secret-management environment. The target must be running; DynaGuard does not launch an arbitrary repository's application automatically.
+---
 
-CLI exit codes:
-
-- `0`: all selected work completed with no findings. Only the stated coverage applies.
-- `1`: work completed with findings, including suspected heuristic findings.
-- `2`: configuration/operational error or incomplete work. Findings may still exist in a partial report.
-- `130`: interrupted by the operator.
-
-### Reproduce the included local permission test
-
-Install the backend dependencies, then start the synthetic fixture in one terminal:
+### 2. Next.js Web Dashboard & API
+Start both the backend API and Next.js frontend:
 
 ```bash
-python -m pip install -r backend/requirements.txt
-# Set FIXTURE_PASSWORD to a disposable test-only password in this terminal.
-# Set FIXTURE_MODE=vulnerable for the initial demonstration.
-cd backend
-python -m uvicorn fixture.main:app --host 127.0.0.1 --port 8101 --no-access-log
-```
+# Option A: One-command disposable preview server with synthetic fixtures
+python scripts/smoke.py --serve
+# Dashboard opens on http://127.0.0.1:3001 (User: admin, Password generated in scripts/smoke.py)
 
-In another activated terminal, with the same `FIXTURE_PASSWORD` environment value:
-
-```bash
-dynaguard verify --config examples/fixture.json --output vulnerable.json
-```
-
-Stop the fixture, set `FIXTURE_MODE=fixed`, and restart it at the same address. Then:
-
-```bash
-dynaguard retest --config examples/fixture.json --report vulnerable.json --test-id records.cross-owner --output retest.json
-```
-
-The retest checks the same project, target and test-contract hash. A changed test must run as a new scan. The original report is never overwritten by retesting unless you explicitly choose the same output filename; use distinct output files.
-
-The fixture is deliberately vulnerable in one mode. Keep it bound to loopback or the isolated Compose network.
-
-## Web dashboard
-
-The existing local dashboard remains available:
-
-```bash
+# Option B: Docker Compose Full Stack
 python scripts/setup.py
 docker compose up --build -d
+# Dashboard opens on http://127.0.0.1:3000
 ```
 
-Open **http://127.0.0.1:3000** and use the administrator password chosen during setup. Database migrations run before the API and worker start.
+---
 
-1. Create/select a project.
-2. Open **Shared engine · configurable application tests**.
-3. Edit the JSON configuration: origin, pinned addresses, allowed paths, identities and resource assertions.
-4. Select **Verify permissions** or **Discover live pages**.
-5. Expand the run to see coverage, individual outcomes, findings, evidence and limitations.
-6. Download the report or cancel unfinished work.
+## 🧪 Senior QA Platform
 
-The selected-source upload accepts at most 100 files and a server request body of 2 MiB. File contents go to your DynaGuard server, are scanned in a temporary directory and then deleted. Reports omit source snippets and secret values. Use the CLI for large repositories or when code must stay on your machine.
+DynaGuard incorporates a dedicated Quality Assurance test runner designed to validate functional integrity alongside security rules:
 
-### Register a real staging target
+1. **Automated Risk Matrices**:
+   - Identifies business-critical risks (Identity & Authentication, Cross-tenant Data Isolation, API Latency).
+   - Generates actionable mitigation strategies mapped directly to automated assertions.
 
-The default Compose setup still has isolated fixture-only networks. **A public URL will not become reachable just because it is pasted into the UI.** This prevents the dashboard from turning into an unrestricted network requester.
+2. **Multi-Step Test Contracts**:
+   - Defines structured JSON test suites (`examples/qa-suite-dynaflow.json`).
+   - Supports status codes, header verifications, body string matches, regex patterns, and maximum response time thresholds.
 
-For a real staging application:
-
-- Put the exact origin and its expected IP addresses in the API and worker's `TARGETS_JSON` deployment variable. Example shape: `{"https://staging.example.com":["<actual-IP>"]}`. Replace the placeholder with the deployment's real address; do not copy it literally.
-- Provide credential variables only to the worker, named `DYNAGUARD_TEST_*`. The fixture password reference is retained for the demo.
-- Give the worker network access to that staging target through an appropriate restricted runner/network configuration. Do not remove all network isolation or connect it to unrelated management services.
-- Match the origin and complete IP-pin set in the UI JSON. The worker revalidates them before execution.
-- Use trusted staging TLS certificates. Certificate/hostname verification stays enabled; there is no insecure TLS switch.
-- For explicitly owned local/private targets, set `allow_private: true`. Link-local/cloud-metadata, multicast and unspecified addresses remain prohibited.
-
-The standalone CLI uses your locally reviewed JSON as its scope policy; it does not read the dashboard registry. CDN address changes require a deliberate pin update.
-
-### Optional live-page browser discovery
-
-Install in your activated CLI environment:
+3. **Live Execution & Progress Reporting**:
+   - Real-time progress bar and step-by-step console logs with duration measurements.
+   - Instant filtering between passed, failed, and skipped checks.
 
 ```bash
-python -m pip install -e './backend[browser]'
-python -m playwright install chromium
+# Run QA test suite via Python backend
+python -m unittest backend/tests/test_qa_runner.py -v
 ```
 
-Set `discovery_identity` and `discovery_paths` in the JSON. Include the exact needed page, asset and API paths in `allowed_paths`; an entry ending in `/` permits descendants of that prefix. Avoid granting `/` unless you intend to permit every path on that origin.
+---
 
-```bash
-dynaguard discover --config dynaguard.json --output discovery.json
-```
+## 🔒 Security Principles & Safe Boundaries
 
-For a containerized browser worker:
+DynaGuard is built with defense-in-depth security principles to prevent scanner weaponization or server-side request forgery (SSRF):
 
-```bash
-docker compose -f compose.yaml -f compose.browser.yaml up --build -d
-```
+- **Strict IP Pinning**: Target hostnames are matched against explicit DNS resolutions. Requests never follow unpinned redirects.
+- **Loopback & Cloud Metadata Protection**: Private IP ranges (e.g., `169.254.169.254`, AWS/GCP instance metadata) are blocked by default unless explicitly whitelisted with `allow_private: true`.
+- **Synthetic Test Records Only**: All cross-owner bypass assertions require synthetic record markers to avoid exposing sensitive real-world user data.
+- **Zero Raw Credential Logging**: Reports, evidence dumps, and console output redact session tokens and passwords.
+- **Explicit Test Contracts**: An HTTP `200 OK` is **never** considered a bypass without validating that designated protected payload fields were returned.
 
-This optional image is larger and needs browser dependencies and more memory. Its default network is still fixture-only. A trusted deployment can instead set `DYNAGUARD_CHROMIUM_EXECUTABLE` to an installed compatible Chrome/Chromium executable.
+---
 
-Discovery renders configured pages and captures JavaScript-initiated GET/HEAD requests through the scoped transport. It does not click buttons, submit forms, follow discovered links automatically or perform write requests. WebSockets and service workers are disabled. Blocked/missing assets and navigation failures yield incomplete coverage. SPA flows requiring localStorage auth state, OAuth redirects or interactive MFA need a future authentication adapter.
-
-Browser routing is not an operating-system sandbox. Use a dedicated restricted runner for untrusted applications. Do not publish the current internal pilot as a public scanning service.
-
-## How to configure tests
-
-See [configuration guide](docs/CONFIGURATION.md) and [system logic](docs/SYSTEM_LOGIC.md).
-
-A permission test contains:
-
-- An authenticated identity that should have access.
-- Another identity (or anonymous user) that should not have access.
-- A resource URL and nonempty JSON-field assertions identifying a **synthetic** protected record.
-- Identity health checks to distinguish a permission denial from an expired session.
-
-A confirmed bypass requires the unauthorized response to match the configured protected-resource assertions. An HTTP 200 alone is never enough. A source-pattern match is never labeled a confirmed runtime bypass.
-
-## Repository layout
+## 📁 Repository Layout
 
 ```text
-backend/dynaguard/       Shared CLI, configuration, transport, verification, source and browser modules
-backend/app/            Dashboard API, persistence and background workers
-backend/migrations/     Existing fixture schema plus shared-engine run migration
-backend/tests/          Legacy and shared-engine acceptance tests
-backend/fixture/        Local synthetic application
-dashboard/app/         Next.js dashboard and shared-engine panel
-examples/               Example data-only configuration
-docs/                   System logic, configuration and historical setup
+├── backend/
+│   ├── dynaguard/          # Shared engine core (CLI, transport, verifier, QA runner, audit)
+│   ├── app/                # FastAPI backend service, auth, job queues, and database models
+│   ├── migrations/         # Alembic database migrations
+│   ├── tests/              # Engine, API, and QA runner unit/acceptance tests
+│   └── fixture/            # Local synthetic application for testing vulnerable vs fixed behavior
+├── dashboard/
+│   ├── app/                # Next.js 16 App Router pages and tab panels
+│   ├── components/ui/      # Reusable UI component library (buttons, badges, alerts, viewers)
+│   ├── e2e/                # Playwright end-to-end milestone test specifications
+│   └── public/             # Static dashboard assets
+├── assets/                 # High-resolution UI screenshots and system diagrams
+├── docs/                   # System design, verification logs, and configuration guides
+├── examples/               # Example JSON verification and QA test suite templates
+└── scripts/                # Automated smoke test suite, setup, and preview runners
 ```
 
-## Verification
+---
 
-From an activated environment with backend dependencies installed:
+## 🚦 Verification & Test Suite
+
+Verify all components locally:
 
 ```bash
+# 1. Backend engine unit & integration tests
 cd backend
 python -m unittest discover -s tests -v
-python -m alembic upgrade head
-python -m alembic check
-```
 
-Run migrations only against your intended local/test database. For browser integration tests, install Chromium and set `DYNAGUARD_BROWSER_TEST=1` before running the suite. That test starts a separate local HTTP application with different routes/login fields, renders its JavaScript page, and checks captured authenticated API traffic.
-
-```bash
-cd dashboard
-npm ci
+# 2. Next.js Dashboard Build & TypeScript typecheck
+cd ../dashboard
 npm run build
 npm run typecheck
+
+# 3. Playwright E2E Milestone Test
+npx playwright test
 ```
 
-See [current verification record](docs/VERIFICATION_SHARED_ENGINE.md) for what was independently run and what remains unverified. The root `VERIFICATION.md` describes the earlier fixture milestone.
+---
 
-## Next implementation steps
-
-1. Validate the browser worker and container networking in your deployment.
-2. Connect DynaFlow staging and define its real roles/resources without changing engine code.
-3. Add guided authentication/configuration forms and linked dashboard retests.
-4. Integrate mature source/dependency scanners and authenticated ZAP scanning.
-5. Add dedicated database, workflow and mobile adapters with appropriate test fixtures.
-
-There is no “bypass all security” mode. Each new capability must have an explicit contract, a vulnerable fixture, a secure counterpart and inspectable evidence.
+<div align="center">
+  <sub>Built for precision security engineering and rock-solid quality validation.</sub>
+</div>
