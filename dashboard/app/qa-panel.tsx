@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useToast } from './toast';
+import { Button, StatusBadge, EvidenceViewer } from '../components/ui';
 
 type Skill = {
   id: string;
@@ -206,9 +207,9 @@ export default function QAPanel({ projectId }: { projectId: string }) {
         headers: { 'Content-Type': 'application/json', 'X-DynaGuard-Client': 'dashboard' },
         body: JSON.stringify(JSON.parse(profile))
       });
-      if (!response.ok) throw new Error('Check the profile schema, workflow IDs and selected skill applicability.');
+      if (!response.ok) throw new Error('Check profile schema, workflow IDs and selected skill applicability.');
       const run = await response.json();
-      const msg = `QA Plan ${run.id.slice(0, 8)} created. ${run.report.coverage.selected_skills} skills selected. No tests executed.`;
+      const msg = `QA Plan ${run.id.slice(0, 8)} created with ${run.report.coverage.selected_skills} skills selected. No tests executed.`;
       setMessage(msg);
       showToast(msg, 'success');
     } catch (error) {
@@ -257,164 +258,172 @@ export default function QAPanel({ projectId }: { projectId: string }) {
 
   return (
     <section>
-      <h2>Senior QA Platform · Pre-Release Verification</h2>
-      <p>
-        Define business invariants, test actual API functional and browser behavior, verify state immutability on negative inputs, and validate release readiness.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2>Senior QA Platform · Pre-Release Verification</h2>
+          <p className="muted" style={{ margin: '4px 0 0' }}>
+            Define business invariants, verify API functional contracts, state immutability, and evaluate release gates.
+          </p>
+        </div>
+      </div>
 
-      {/* Mode Navigation */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-        <button
-          className={activeTab === 'execute' ? 'primary' : ''}
+      {/* Sub-mode selector */}
+      <div style={{ display: 'flex', gap: 8, margin: '16px 0' }}>
+        <Button
+          size="sm"
+          variant={activeTab === 'execute' ? 'primary' : 'secondary'}
           onClick={() => setActiveTab('execute')}
         >
           ⚡ Live Test Execution Runner
-        </button>
-        <button
-          className={activeTab === 'plan' ? 'primary' : ''}
+        </Button>
+        <Button
+          size="sm"
+          variant={activeTab === 'plan' ? 'primary' : 'secondary'}
           onClick={() => setActiveTab('plan')}
         >
-          📋 Risk-Based QA Planning (43 Skills)
-        </button>
+          📋 Risk-Based QA Planning ({skills.length} Skills)
+        </Button>
       </div>
 
       {activeTab === 'execute' ? (
         <div>
           {/* Preset Selector */}
-          <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Target Preset:</span>
-            <button
-              style={{ fontSize: 12, padding: '4px 10px', background: preset === 'hamrobuzz' ? '#0d9488' : '#f1f5f9', color: preset === 'hamrobuzz' ? 'white' : '#334155' }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Target Preset:</span>
+            <Button
+              size="sm"
+              variant={preset === 'hamrobuzz' ? 'primary' : 'ghost'}
               onClick={() => selectPreset('hamrobuzz')}
             >
               HamroBuzz Production (https://hamrobuzz.com)
-            </button>
-            <button
-              style={{ fontSize: 12, padding: '4px 10px', background: preset === 'dynaflow' ? '#0d9488' : '#f1f5f9', color: preset === 'dynaflow' ? 'white' : '#334155' }}
+            </Button>
+            <Button
+              size="sm"
+              variant={preset === 'dynaflow' ? 'primary' : 'ghost'}
               onClick={() => selectPreset('dynaflow')}
             >
               DynaFlow Local (http://127.0.0.1:8010)
-            </button>
-            <button
-              style={{ fontSize: 12, padding: '4px 10px', background: preset === 'custom' ? '#0d9488' : '#f1f5f9', color: preset === 'custom' ? 'white' : '#334155' }}
+            </Button>
+            <Button
+              size="sm"
+              variant={preset === 'custom' ? 'primary' : 'ghost'}
               onClick={() => selectPreset('custom')}
             >
               Custom Suite
-            </button>
+            </Button>
           </div>
 
-          <details open style={{ marginBottom: 16 }}>
+          <details open>
             <summary>Configure QA Test Suite Contract (API & Browser Workflows)</summary>
-            <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+            <p className="muted" style={{ fontSize: 13, margin: '8px 0' }}>
               Tests executed through this runner evaluate real status codes, JSON field assertions, state immutability invariants, and browser interactions.
             </p>
-            <label>
+            <label htmlFor="qa-suite-json">
               QA Test Suite JSON
               <textarea
-                rows={14}
+                id="qa-suite-json"
+                rows={12}
                 value={suite}
                 onChange={e => {
                   setSuite(e.target.value);
                   setPreset('custom');
                 }}
-                style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                style={{ width: '100%', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 12 }}
               />
             </label>
-            <button className="primary" disabled={busy} onClick={executeSuite} style={{ marginTop: 8 }}>
-              {busy ? 'Executing Live Test Suite…' : '🚀 Execute QA Test Suite'}
-            </button>
+            <div style={{ marginTop: 10 }}>
+              <Button
+                variant="primary"
+                loading={busy}
+                disabled={busy}
+                onClick={executeSuite}
+              >
+                {busy ? 'Executing Live Test Suite…' : 'Execute QA Test Suite'}
+              </Button>
+            </div>
           </details>
 
           {/* Execution Report Results Card */}
           {latestReport && (
-            <div style={{ marginTop: 20, borderTop: '2px solid #e2e8f0', paddingTop: 18 }}>
+            <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 18 }}>
               {/* Release Gate Banner */}
               <div
                 style={{
-                  padding: '14px 18px',
-                  borderRadius: 8,
+                  padding: 14,
+                  borderRadius: 'var(--radius-panel)',
                   marginBottom: 16,
-                  background: gate?.decision === 'ready_for_release' ? '#f0fdf4' : '#fef2f2',
-                  border: `1px solid ${gate?.decision === 'ready_for_release' ? '#86efac' : '#fca5a5'}`
+                  background: gate?.decision === 'ready_for_release' ? 'var(--success-bg)' : 'var(--danger-bg)',
+                  border: `1px solid ${gate?.decision === 'ready_for_release' ? 'var(--success-border)' : 'var(--danger-border)'}`
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ margin: 0, color: gate?.decision === 'ready_for_release' ? '#166534' : '#991b1b' }}>
-                    {gate?.decision === 'ready_for_release' ? '✅ RELEASE READY: ALL CHECKS PASSED' : '❌ RELEASE REJECTED: DEFECTS DETECTED'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <h3 style={{ margin: 0, color: gate?.decision === 'ready_for_release' ? 'var(--success-text)' : 'var(--danger-text)' }}>
+                    {gate?.decision === 'ready_for_release' ? '✓ RELEASE READY: ALL REQUIRED CHECKS PASSED' : '✕ RELEASE REJECTED: CRITICAL DEFECTS DETECTED'}
                   </h3>
-                  <span className={`badge ${gate?.decision === 'ready_for_release' ? 'passed' : 'failed'}`}>
-                    {gate?.decision?.toUpperCase()}
-                  </span>
+                  <StatusBadge status={gate?.decision || 'unknown'} label={gate?.decision?.toUpperCase()} />
                 </div>
-                <p style={{ margin: '6px 0 0 0', fontSize: 13, color: gate?.decision === 'ready_for_release' ? '#15803d' : '#b91c1c' }}>
+                <p style={{ margin: '6px 0 0 0', fontSize: 13, color: gate?.decision === 'ready_for_release' ? 'var(--success-text)' : 'var(--danger-text)' }}>
                   {gate?.reason}
                 </p>
               </div>
 
-              {/* Statistics Metrics */}
+              {/* Statistics Metrics Grid */}
               {cov && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10, marginBottom: 16 }}>
-                  <div style={{ padding: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#0f172a' }}>{cov.planned}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Planned</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginBottom: 16 }}>
+                  <div style={{ padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: 'var(--text)' }}>{cov.planned}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Planned</div>
                   </div>
-                  <div style={{ padding: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#15803d' }}>{cov.passed}</div>
-                    <div style={{ fontSize: 11, color: '#166534' }}>Passed</div>
+                  <div style={{ padding: 12, background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 'var(--radius-control)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: 'var(--success-text)' }}>{cov.passed}</div>
+                    <div style={{ fontSize: 11, color: 'var(--success-text)' }}>Passed</div>
                   </div>
-                  <div style={{ padding: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#dc2626' }}>{cov.failed}</div>
-                    <div style={{ fontSize: 11, color: '#991b1b' }}>Failed</div>
+                  <div style={{ padding: 12, background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: 'var(--radius-control)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: 'var(--danger-text)' }}>{cov.failed}</div>
+                    <div style={{ fontSize: 11, color: 'var(--danger-text)' }}>Failed</div>
                   </div>
-                  <div style={{ padding: 10, background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 6, textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#d97706' }}>{cov.incomplete || 0}</div>
-                    <div style={{ fontSize: 11, color: '#92400e' }}>Incomplete</div>
+                  <div style={{ padding: 12, background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 'var(--radius-control)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: 'var(--warning-text)' }}>{cov.incomplete || 0}</div>
+                    <div style={{ fontSize: 11, color: 'var(--warning-text)' }}>Incomplete</div>
                   </div>
                 </div>
               )}
 
               {/* Individual Test Executions List */}
-              <h3>Executed Tests & Assertions ({latestReport.executions.length})</h3>
-              <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+              <h3 style={{ marginBottom: 10 }}>Executed Tests & Assertions ({latestReport.executions.length})</h3>
+              <div style={{ display: 'grid', gap: 8 }}>
                 {latestReport.executions.map(ex => (
                   <div
                     key={ex.test_id}
                     style={{
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 8,
-                      padding: 14,
-                      background: ex.outcome === 'passed' ? '#ffffff' : '#fff5f5'
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-control)',
+                      padding: 12,
+                      background: ex.outcome === 'passed' ? 'var(--surface)' : 'var(--danger-bg)'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className={`badge ${ex.outcome === 'passed' ? 'passed' : 'failed'}`}>
-                          {ex.outcome.toUpperCase()}
-                        </span>
-                        <span style={{ fontSize: 11, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                        <StatusBadge status={ex.outcome} label={ex.outcome.toUpperCase()} />
+                        <span style={{ fontSize: 11, background: 'var(--surface-muted)', padding: '2px 6px', borderRadius: 'var(--radius-badge)', fontFamily: 'ui-monospace, monospace' }}>
                           {ex.technique}
                         </span>
                         <strong>{ex.name}</strong>
                       </div>
-                      <span style={{ fontSize: 12, color: '#64748b' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                         {ex.duration_ms} ms
                       </span>
                     </div>
 
-                    <div style={{ fontSize: 13, marginTop: 8, color: ex.outcome === 'passed' ? '#15803d' : '#b91c1c' }}>
+                    <div style={{ fontSize: 13, marginTop: 8, color: ex.outcome === 'passed' ? 'var(--success-text)' : 'var(--danger-text)' }}>
                       <strong>Result: </strong> {ex.actual}
                     </div>
 
-                    {/* Collapsible Evidence Steps */}
                     {ex.evidence && ex.evidence.length > 0 && (
-                      <details style={{ marginTop: 8 }}>
-                        <summary style={{ fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-                          View Raw Evidence ({ex.evidence.length} steps)
-                        </summary>
-                        <pre style={{ background: '#0f172a', color: '#f8fafc', padding: 10, borderRadius: 6, fontSize: 11, marginTop: 6, overflowX: 'auto' }}>
-                          {JSON.stringify(ex.evidence, null, 2)}
-                        </pre>
-                      </details>
+                      <EvidenceViewer
+                        content={ex.evidence}
+                        summaryTitle={`View execution trace (${ex.evidence.length} steps)`}
+                      />
                     )}
                   </div>
                 ))}
@@ -426,18 +435,19 @@ export default function QAPanel({ projectId }: { projectId: string }) {
         <div>
           <details style={{ marginBottom: 14 }}>
             <summary>{skills.length} QA Skill Contracts & Maturity Status</summary>
-            <div style={{ maxHeight: 300, overflowY: 'auto', marginTop: 10 }}>
+            <div style={{ maxHeight: 280, overflowY: 'auto', marginTop: 10, display: 'grid', gap: 6 }}>
               {skills.map(skill => (
-                <details key={skill.id} style={{ marginBottom: 6 }}>
-                  <summary style={{ fontSize: 13 }}>
-                    <strong>{skill.name}</strong> · <span className="badge incomplete">{skill.implementation}</span>
+                <details key={skill.id} style={{ margin: 0 }}>
+                  <summary style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{skill.name}</strong>
+                    <StatusBadge status="incomplete" label={skill.implementation} />
                   </summary>
-                  <ul style={{ fontSize: 12, marginTop: 4 }}>
+                  <ul style={{ fontSize: 12, marginTop: 6, paddingLeft: 18 }}>
                     {skill.checks.map(c => (
                       <li key={c}>{c}</li>
                     ))}
                   </ul>
-                  <p style={{ fontSize: 12, margin: '4px 0' }}>
+                  <p style={{ fontSize: 12, margin: '6px 0 0' }}>
                     <strong>Required Evidence:</strong> {skill.evidence_required}
                   </p>
                 </details>
@@ -447,25 +457,33 @@ export default function QAPanel({ projectId }: { projectId: string }) {
 
           <details open>
             <summary>Configure QA Profile & Risk Mapping</summary>
-            <label>
+            <label htmlFor="qa-profile-json">
               QA Profile JSON
               <textarea
-                rows={14}
+                id="qa-profile-json"
+                rows={12}
                 value={profile}
                 onChange={e => setProfile(e.target.value)}
-                style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
               />
             </label>
-            <button disabled={busy} onClick={plan} style={{ marginTop: 8 }}>
-              Create Risk-Ordered QA Plan · Does not run tests
-            </button>
+            <div style={{ marginTop: 10 }}>
+              <Button
+                variant="primary"
+                loading={busy}
+                disabled={busy}
+                onClick={plan}
+              >
+                Create Risk-Ordered QA Plan · Does not run tests
+              </Button>
+            </div>
           </details>
         </div>
       )}
 
       {message && (
-        <div style={{ marginTop: 14, padding: 12, borderRadius: 6, background: '#f8fafc', border: '1px solid #cbd5e1' }}>
-          <strong>Run Status:</strong> {message}
+        <div style={{ marginTop: 14, padding: 12, borderRadius: 'var(--radius-control)', background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+          <strong>Status: </strong> {message}
         </div>
       )}
     </section>
